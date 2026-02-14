@@ -42,4 +42,4 @@ See [docs/design.md](docs/design.md) for full architecture, schema, chunking str
 
 ## Status
 
-Iteration 1 complete — ingestion pipeline operational. 41 IRD sources ingested, 141 chunks with embeddings.
+Iteration 1 complete — ingestion pipeline operational with IRD sources indexed.
