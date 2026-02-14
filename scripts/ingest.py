@@ -4,6 +4,9 @@ Usage:
     # Process all sources from config/sources.yaml
     python scripts/ingest.py
 
+    # Process sources from an alternate config file
+    python scripts/ingest.py --config sources_taxtechnical.yaml
+
     # Process a single URL
     python scripts/ingest.py --url "https://www.ird.govt.nz/..."
 
@@ -21,6 +24,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from datetime import date
 from pathlib import Path
 
 # Add project root to path
@@ -38,6 +42,11 @@ logger = logging.getLogger(__name__)
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the NZ Tax RAG ingestion pipeline")
     parser.add_argument("--url", help="Process a single URL instead of all sources")
+    parser.add_argument(
+        "--config",
+        default="sources.yaml",
+        help="Config file in config/ directory (default: sources.yaml)",
+    )
     parser.add_argument(
         "--source-type",
         default="ird_guidance",
@@ -72,11 +81,19 @@ async def run(args: argparse.Namespace) -> None:
             results.append(result)
         else:
             # Process all sources from config
-            config = load_yaml_config("sources.yaml")
+            config = load_yaml_config(args.config)
             sources = config.get("sources", [])
-            logger.info("Processing %d sources from config/sources.yaml", len(sources))
+            logger.info("Processing %d sources from config/%s", len(sources), args.config)
 
             for source in sources:
+                # Parse issue_date from YAML string if present
+                issue_date: date | None = None
+                raw_date = source.get("issue_date")
+                if isinstance(raw_date, str):
+                    issue_date = date.fromisoformat(raw_date)
+                elif isinstance(raw_date, date):
+                    issue_date = raw_date
+
                 try:
                     result = await pipeline.process_url(
                         url=source["url"],
@@ -84,6 +101,8 @@ async def run(args: argparse.Namespace) -> None:
                         title=source.get("title"),
                         force=args.force,
                         dry_run=args.dry_run,
+                        identifier=source.get("identifier"),
+                        issue_date=issue_date,
                     )
                     results.append(result)
                 except Exception:

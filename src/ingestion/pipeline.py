@@ -6,7 +6,7 @@ Supports upsert semantics with content hash change detection.
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import asyncpg
 
@@ -16,6 +16,7 @@ from src.ingestion.chunker import chunk_document
 from src.ingestion.crawler import Crawler
 from src.ingestion.parsers.html_parser import parse_html
 from src.ingestion.parsers.pdf_parser import parse_pdf
+from src.ingestion.parsers.taxtechnical_parser import parse_taxtechnical
 from src.rag.embedder import GeminiEmbedder
 
 logger = logging.getLogger(__name__)
@@ -118,16 +119,21 @@ class IngestionPipeline:
         source_type: str,
         title: str,
         content_hash: str,
+        identifier: str | None = None,
+        issue_date: date | None = None,
     ) -> str:
         """Insert or update a document source. Returns the source ID."""
         row = await conn.fetchrow(
             """
-            INSERT INTO document_sources (url, source_type, title, content_hash, last_crawled_at)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO document_sources
+                (url, source_type, title, content_hash, last_crawled_at, identifier, issue_date)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (url) DO UPDATE SET
                 title = EXCLUDED.title,
                 content_hash = EXCLUDED.content_hash,
                 last_crawled_at = EXCLUDED.last_crawled_at,
+                identifier = COALESCE(EXCLUDED.identifier, document_sources.identifier),
+                issue_date = COALESCE(EXCLUDED.issue_date, document_sources.issue_date),
                 updated_at = NOW()
             RETURNING id
             """,
@@ -136,6 +142,8 @@ class IngestionPipeline:
             title,
             content_hash,
             datetime.now(timezone.utc),
+            identifier,
+            issue_date,
         )
         return str(row["id"])
 
@@ -146,6 +154,8 @@ class IngestionPipeline:
         title: str | None = None,
         force: bool = False,
         dry_run: bool = False,
+        identifier: str | None = None,
+        issue_date: date | None = None,
     ) -> dict[str, int | str | bool]:
         """Process a single URL through the full pipeline.
 
@@ -155,6 +165,8 @@ class IngestionPipeline:
             title: Optional override title (otherwise extracted from HTML).
             force: Re-process even if content hash is unchanged.
             dry_run: Crawl, parse, chunk but don't embed or store.
+            identifier: Publication reference (e.g. "QB 25/01", "IS 24/10").
+            issue_date: Publication date.
 
         Returns:
             Dict with processing stats.
@@ -177,9 +189,23 @@ class IngestionPipeline:
                 logger.error("PDF crawl result missing raw_bytes: %s", url)
                 return {"url": url, "skipped": True, "reason": "missing PDF bytes"}
             parsed: ParsedDocument = parse_pdf(crawl_result.raw_bytes, url)
+        elif "taxtechnical.ird.govt.nz" in url:
+            parsed = parse_taxtechnical(crawl_result.html, url)
         else:
             parsed = parse_html(crawl_result.html, url)
         page_title = title or parsed.title
+
+        # Follow PDF link if the parser detected one (e.g. taxtechnical stub pages)
+        if parsed.pdf_url:
+            logger.info("Following PDF link: %s", parsed.pdf_url)
+            pdf_crawl = await self.crawler.crawl(parsed.pdf_url)
+            if pdf_crawl.content_type == "pdf" and pdf_crawl.raw_bytes:
+                pdf_parsed = parse_pdf(pdf_crawl.raw_bytes, url)
+                parsed = ParsedDocument(
+                    title=parsed.title,
+                    url=url,
+                    sections=parsed.sections + pdf_parsed.sections,
+                )
 
         # Chunk
         chunks: list[ChunkData] = chunk_document(parsed)
@@ -210,7 +236,8 @@ class IngestionPipeline:
         async with pool.acquire() as conn:
             async with conn.transaction():
                 source_id = await self._upsert_source(
-                    conn, url, source_type, page_title, crawl_result.content_hash
+                    conn, url, source_type, page_title, crawl_result.content_hash,
+                    identifier=identifier, issue_date=issue_date,
                 )
                 stored = await self._store_chunks(conn, source_id, chunks, embeddings)
 

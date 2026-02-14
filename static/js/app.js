@@ -82,9 +82,19 @@ async function submitQuestion(question) {
   }
 }
 
+/* Open markdown-rendered links in new tabs */
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.tagName === "A" && node.getAttribute("href")) {
+    node.setAttribute("target", "_blank");
+    node.setAttribute("rel", "noopener noreferrer");
+  }
+});
+
 function renderAnswer(data) {
   /* Markdown → sanitised HTML */
-  const html = DOMPurify.sanitize(marked.parse(data.answer));
+  const html = DOMPurify.sanitize(marked.parse(data.answer), {
+    ADD_ATTR: ["target"],
+  });
   $(".answer-content").innerHTML = html;
 
   /* Sources */

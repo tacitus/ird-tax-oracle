@@ -6,6 +6,7 @@ from typing import Any
 
 from src.db.models import AskResponse, SourceReference
 from src.llm.gateway import LLMGateway
+from src.llm.postprocess import linkify_bare_urls, strip_trailing_sources
 from src.llm.prompts import build_rag_messages
 from src.llm.tools import TOOLS
 from src.rag.retriever import HybridRetriever
@@ -86,6 +87,10 @@ class Orchestrator:
                         section_title=chunk.section_title,
                     )
                 )
+
+        # Post-process: strip duplicate sources block, linkify bare URLs
+        answer = strip_trailing_sources(answer)
+        answer = linkify_bare_urls(answer, sources)
 
         return AskResponse(
             answer=answer,

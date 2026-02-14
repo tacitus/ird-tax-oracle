@@ -177,19 +177,6 @@ sources:
     source_type: ird_guidance
     title: "Living overseas with a student loan"
 
-  # === 1G. Tax Technical (index pages) ===
-  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked"
-    source_type: interpretation_statement
-    title: "Questions we've been asked - index"
-
-  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements"
-    source_type: interpretation_statement
-    title: "Interpretation statements - index"
-
-  - url: "https://www.taxtechnical.ird.govt.nz/standard-practice-statements"
-    source_type: interpretation_statement
-    title: "Standard practice statements - index"
-
   # === Tier 0 — Structured/Calculator PDFs ===
   - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/digital-service-providers/software-providers/payroll-calculations-business-rules-specifications/payroll-calculations-and-business-rules-specification-2026-v1.pdf"
     source_type: guide_pdf

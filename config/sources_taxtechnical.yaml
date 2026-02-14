@@ -1,0 +1,316 @@
+# Tax Technical sources for NZ Personal Income Tax RAG
+# Curated from taxtechnical.ird.govt.nz — Commissioner's official interpretations
+# URLs verified 2026-02-14
+
+sources:
+  # =====================================================================
+  # Questions We've Been Asked (QWBAs)
+  # Q&A format — ideal for RAG semantic retrieval
+  # =====================================================================
+
+  # --- 2025 QWBAs ---
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2025/qb-25-01"
+    source_type: qwba
+    title: "QB 25/01 - Income tax - Which rules apply if I rent out my home to a flatmate"
+    identifier: "QB 25/01"
+    issue_date: "2025-04-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2025/qb-25-07"
+    source_type: qwba
+    title: "QB 25/07 - Income tax treatment of gift cards and products provided as trade rebates"
+    identifier: "QB 25/07"
+    issue_date: "2025-05-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2025/qb-25-08"
+    source_type: qwba
+    title: "QB 25/08 - When is land acquired for a purpose (bright-line test)"
+    identifier: "QB 25/08"
+    issue_date: "2025-05-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2025/qb-25-11"
+    source_type: qwba
+    title: "QB 25/11 - Bright-line start date for the 2-year test"
+    identifier: "QB 25/11"
+    issue_date: "2025-05-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2025/qb-25-12"
+    source_type: qwba
+    title: "QB 25/12 - How does the bright-line test apply to the sale of a subdivided section"
+    identifier: "QB 25/12"
+    issue_date: "2025-05-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2025/qb-25-13"
+    source_type: qwba
+    title: "QB 25/13 - When is the sale of a lifestyle block excluded from the bright-line test"
+    identifier: "QB 25/13"
+    issue_date: "2025-05-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2025/qb-25-15"
+    source_type: qwba
+    title: "QB 25/15 - How do the bright-line rollover relief provisions apply to transfers of residential land"
+    identifier: "QB 25/15"
+    issue_date: "2025-05-01"
+
+  # --- 2024 QWBAs ---
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2024/qb-24-01"
+    source_type: qwba
+    title: "QB 24/01 - If a person has two or more homes, which one is their main home"
+    identifier: "QB 24/01"
+    issue_date: "2024-01-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2024/qb-24-02"
+    source_type: qwba
+    title: "QB 24/02 - Bright-line test - main home exclusion - renting to flatmates"
+    identifier: "QB 24/02"
+    issue_date: "2024-01-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2024/qb-24-03"
+    source_type: qwba
+    title: "QB 24/03 - Employee share schemes - fringe benefit treatment when trustee of family trust receives loan"
+    identifier: "QB 24/03"
+    issue_date: "2024-01-01"
+
+  # --- 2023 QWBAs ---
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2023/qb-23-03"
+    source_type: qwba
+    title: "QB 23/03 - Income tax - Donation tax credits and payments made by parents to childcare centres"
+    identifier: "QB 23/03"
+    issue_date: "2023-01-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2023/qb-23-05"
+    source_type: qwba
+    title: "QB 23/05 - Provisional tax - impact on salary or wage earners"
+    identifier: "QB 23/05"
+    issue_date: "2023-01-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2023/qb-23-08"
+    source_type: qwba
+    title: "QB 23/08 - Income tax - deductibility of expenditure - renting to flatmates"
+    identifier: "QB 23/08"
+    issue_date: "2023-01-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2023/qb-23-10"
+    source_type: qwba
+    title: "QB 23/10 - Foreign investment fund (FIF) calculation methods in cases of non-compliance"
+    identifier: "QB 23/10"
+    issue_date: "2023-01-01"
+
+  # --- 2021 QWBAs ---
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2021/qb-21-01"
+    source_type: qwba
+    title: "QB 21/01 - Taxation of United Nations Joint Staff Pension Fund pensions"
+    identifier: "QB 21/01"
+    issue_date: "2021-01-01"
+
+  # --- 2020 QWBAs ---
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2020/qb-20-01"
+    source_type: qwba
+    title: "QB 20/01 - Can owners of existing residential rental properties claim interest deductions"
+    identifier: "QB 20/01"
+    issue_date: "2020-01-01"
+
+  # --- 2019 QWBAs ---
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2019/qb-1913-income-tax-when-does-the-business-premises-exclusion-to-the-bright-line-test-apply"
+    source_type: qwba
+    title: "QB 19/13 - Income tax - When does the business premises exclusion to the bright-line test apply"
+    identifier: "QB 19/13"
+    issue_date: "2019-01-01"
+
+  # --- 2018 QWBAs (insurance series + farm workers) ---
+  - url: "https://www.taxtechnical.ird.govt.nz/-/media/project/ir/tt/pdfs/questions-we-ve-been-asked/2018/qb18-02.pdf"
+    source_type: qwba
+    title: "QB 18/02 - Income tax - insurance - sickness insurance taken out by employer for employee"
+    identifier: "QB 18/02"
+    issue_date: "2018-02-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked/2018/qb1803-qb-1803-income-tax-insurance-term-life-insurance-policy-taken-out-by-employer-for-the-benefit"
+    source_type: qwba
+    title: "QB 18/03 - Income tax - insurance - term life insurance taken out by employer for employee"
+    identifier: "QB 18/03"
+    issue_date: "2018-02-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/-/media/project/ir/tt/pdfs/questions-we-ve-been-asked/2018/qb18-04.pdf"
+    source_type: qwba
+    title: "QB 18/04 - Income tax - insurance - employer pays premiums on employee's personal insurance"
+    identifier: "QB 18/04"
+    issue_date: "2018-02-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/-/media/project/ir/tt/pdfs/questions-we-ve-been-asked/2018/qb18-05.pdf"
+    source_type: qwba
+    title: "QB 18/05 - Income tax - insurance - redundancy or mortgage insurance taken out by employer"
+    identifier: "QB 18/05"
+    issue_date: "2018-02-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/-/media/project/ir/tt/pdfs/questions-we-ve-been-asked/2018/qb18-13.pdf"
+    source_type: qwba
+    title: "QB 18/13 - Tax treatment of allowances to farm workers"
+    identifier: "QB 18/13"
+    issue_date: "2018-06-01"
+
+  # =====================================================================
+  # Interpretation Statements
+  # Commissioner's most authoritative published interpretations
+  # =====================================================================
+
+  # --- 2025 Interpretation Statements ---
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2025/is-25-04"
+    source_type: interpretation_statement
+    title: "IS 25/04 - What an employee share scheme is, the taxing date and market value"
+    identifier: "IS 25/04"
+    issue_date: "2025-03-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2025/is-25-06"
+    source_type: interpretation_statement
+    title: "IS 25/06 - Employer obligations for employee share scheme benefits (cash-settled)"
+    identifier: "IS 25/06"
+    issue_date: "2025-03-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2025/is-25-07"
+    source_type: interpretation_statement
+    title: "IS 25/07 - PAYE - How an employer funds the tax cost on an employee share scheme benefit"
+    identifier: "IS 25/07"
+    issue_date: "2025-03-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2025/is-25-08"
+    source_type: interpretation_statement
+    title: "IS 25/08 - Income tax - implications of a change of use of dwelling"
+    identifier: "IS 25/08"
+    issue_date: "2025-04-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2025/is-25-12"
+    source_type: interpretation_statement
+    title: "IS 25/12 - Income tax - Using the cost method to determine FIF income"
+    identifier: "IS 25/12"
+    issue_date: "2025-05-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2025/is-25-16"
+    source_type: interpretation_statement
+    title: "IS 25/16 - Tax residence"
+    identifier: "IS 25/16"
+    issue_date: "2025-05-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2025/is-25-17"
+    source_type: interpretation_statement
+    title: "IS 25/17 - Tax residence - government service rule"
+    identifier: "IS 25/17"
+    issue_date: "2025-05-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2025/is-25-18"
+    source_type: interpretation_statement
+    title: "IS 25/18 - Income tax - Whether money or property received from overseas is income from a foreign trust"
+    identifier: "IS 25/18"
+    issue_date: "2025-09-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2025/is-25-25"
+    source_type: interpretation_statement
+    title: "IS 25/25 - Income tax - business activity"
+    identifier: "IS 25/25"
+    issue_date: "2025-12-01"
+
+  # --- 2024 Interpretation Statements ---
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2024/is-24-01"
+    source_type: interpretation_statement
+    title: "IS 24/01 - Taxation of trusts"
+    identifier: "IS 24/01"
+    issue_date: "2024-02-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2024/is-24-10"
+    source_type: interpretation_statement
+    title: "IS 24/10 - Income tax - Share investments"
+    identifier: "IS 24/10"
+    issue_date: "2024-12-01"
+
+  # --- 2023 Interpretation Statements ---
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2023/is-23-02"
+    source_type: interpretation_statement
+    title: "IS 23/02 - Income tax - Application of the s CZ 39 5 year bright-line test to family transactions"
+    identifier: "IS 23/02"
+    issue_date: "2023-01-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2023/is-23-11"
+    source_type: interpretation_statement
+    title: "IS 23/11 - Income tax - when gifts are assessable income"
+    identifier: "IS 23/11"
+    issue_date: "2023-12-01"
+
+  # --- 2021 Interpretation Statements ---
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements/2021/is-21-09"
+    source_type: interpretation_statement
+    title: "IS 21/09 - Income tax - foreign tax credits - how to calculate a foreign tax credit"
+    identifier: "IS 21/09"
+    issue_date: "2021-01-01"
+
+  # =====================================================================
+  # Fact Sheets
+  # Concise summaries of longer items — excellent for RAG retrieval
+  # =====================================================================
+
+  - url: "https://www.taxtechnical.ird.govt.nz/fact-sheets/2024/is-24-10-fs-1"
+    source_type: fact_sheet
+    title: "IS 24/10 FS-1 - Income tax - Share investments - whether the FIF rules apply"
+    identifier: "IS 24/10 FS-1"
+    issue_date: "2024-12-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/fact-sheets/2024/is-24-10-fs-2"
+    source_type: fact_sheet
+    title: "IS 24/10 FS-2 - Income tax - Share investments - dividends"
+    identifier: "IS 24/10 FS-2"
+    issue_date: "2024-12-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/fact-sheets/2025/is-25-08-fs-1"
+    source_type: fact_sheet
+    title: "IS 25/08 FS-1 - Income tax - residential property moving from income-earning to private use"
+    identifier: "IS 25/08 FS-1"
+    issue_date: "2025-04-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/fact-sheets/2025/is-25-18-fs"
+    source_type: fact_sheet
+    title: "IS 25/18 FS - Income tax - whether money or property from overseas is income from a foreign trust"
+    identifier: "IS 25/18 FS"
+    issue_date: "2025-09-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/fact-sheets/2023/is-23-02-fs"
+    source_type: fact_sheet
+    title: "IS 23/02 FS - Bright-line test and family transactions (s CZ 39)"
+    identifier: "IS 23/02 FS"
+    issue_date: "2023-01-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/fact-sheets/2023/qb-23-03-and-qb-23-04-fs-1"
+    source_type: fact_sheet
+    title: "QB 23/03 & QB 23/04 FS-1 - Income Tax - Payments made by parents to childcare centres"
+    identifier: "QB 23/03 FS-1"
+    issue_date: "2023-01-01"
+
+  # =====================================================================
+  # Operational Statements
+  # Commissioner's operational approach — cherry-picked for relevance
+  # =====================================================================
+
+  # Kilometre rates (most recent years)
+  - url: "https://www.taxtechnical.ird.govt.nz/operational-statements/2025/os-19-04-km-2025"
+    source_type: operational_statement
+    title: "OS 19/04 KM-2025 - Kilometre rates for business use of vehicles (2025 income year)"
+    identifier: "OS 19/04 KM-2025"
+    issue_date: "2025-01-01"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/operational-statements/2024/os-19-04-km-2024"
+    source_type: operational_statement
+    title: "OS 19/04 KM-2024 - Kilometre rates for business use of vehicles (2024 income year)"
+    identifier: "OS 19/04 KM-2024"
+    issue_date: "2024-01-01"
+
+  # Non-resident employer PAYE
+  - url: "https://www.taxtechnical.ird.govt.nz/operational-statements/2021/os-21-04"
+    source_type: operational_statement
+    title: "OS 21/04 - Non-resident employers' obligations to deduct PAYE, FBT and ESCT"
+    identifier: "OS 21/04"
+    issue_date: "2021-01-01"
+
+  # =====================================================================
+  # Overviews
+  # Topic-level index pages with linked guidance
+  # =====================================================================
+
+  - url: "https://www.taxtechnical.ird.govt.nz/overviews/bright-line-test"
+    source_type: ird_guidance
+    title: "Bright-line test - overview of all related guidance"

@@ -56,6 +56,7 @@ class HybridRetriever:
                    c.embedding <=> $1 AS distance
             FROM document_chunks c
             JOIN document_sources s ON s.id = c.source_id
+            WHERE s.is_active = TRUE AND s.superseded_by IS NULL
             ORDER BY c.embedding <=> $1
             LIMIT $2
             """,
@@ -91,6 +92,7 @@ class HybridRetriever:
             FROM document_chunks c
             JOIN document_sources s ON s.id = c.source_id
             WHERE c.search_vector @@ plainto_tsquery('english', $1)
+              AND s.is_active = TRUE AND s.superseded_by IS NULL
             ORDER BY rank DESC
             LIMIT $2
             """,

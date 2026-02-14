@@ -1,6 +1,6 @@
 """Pydantic models for database rows and pipeline data structures."""
 
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -17,6 +17,9 @@ class DocumentSource(BaseModel):
     title: str | None = None
     last_crawled_at: datetime | None = None
     content_hash: str | None = None
+    identifier: str | None = None
+    issue_date: date | None = None
+    superseded_by: str | None = None
     is_active: bool = True
     created_at: datetime
     updated_at: datetime
@@ -67,6 +70,7 @@ class ParsedDocument(BaseModel):
     title: str
     url: str
     sections: list[ParsedSection]
+    pdf_url: str | None = None
 
 
 class ChunkData(BaseModel):

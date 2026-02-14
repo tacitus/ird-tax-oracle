@@ -86,7 +86,9 @@ def test_format_system_prompt_contains_key_instructions() -> None:
     prompt = format_system_prompt(date(2026, 2, 14))
     assert "NEVER" in prompt
     assert "ALWAYS cite" in prompt
+    assert "markdown link" in prompt.lower()
     assert "KiwiSaver" in prompt
+    assert "Do NOT end your answer with" in prompt
 
 
 # --- Context formatting ---

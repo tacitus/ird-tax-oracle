@@ -14,6 +14,18 @@ def ird_guidance_html() -> str:
     return (FIXTURES_DIR / "ird_guidance_page.html").read_text()
 
 
+@pytest.fixture
+def taxtechnical_full_content_html() -> str:
+    """Load the taxtechnical full content page HTML fixture."""
+    return (FIXTURES_DIR / "taxtechnical_full_content.html").read_text()
+
+
+@pytest.fixture
+def taxtechnical_pdf_stub_html() -> str:
+    """Load the taxtechnical PDF stub page HTML fixture."""
+    return (FIXTURES_DIR / "taxtechnical_pdf_stub.html").read_text()
+
+
 # --- PDF fixtures ---
 
 
