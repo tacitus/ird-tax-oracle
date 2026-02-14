@@ -1,0 +1,216 @@
+# Tier 1 sources for NZ Personal Income Tax RAG
+# URLs verified against live ird.govt.nz as of 2026-02-14
+
+sources:
+  # === 1A. Income Tax for Individuals ===
+  # -- Hub pages --
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals"
+    source_type: ird_guidance
+    title: "Income tax for individuals"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/how-income-is-taxed"
+    source_type: ird_guidance
+    title: "How income gets taxed"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/what-happens-at-the-end-of-the-tax-year"
+    source_type: ird_guidance
+    title: "What happens at the end of the tax year"
+
+  # -- Tax codes and rates --
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/tax-codes-and-tax-rates-for-individuals/tax-rates-for-individuals"
+    source_type: ird_guidance
+    title: "Tax rates for individuals"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/tax-codes-and-tax-rates-for-individuals/about-tax-codes"
+    source_type: ird_guidance
+    title: "About tax codes"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/tax-codes-and-tax-rates-for-individuals/secondary-tax-codes"
+    source_type: ird_guidance
+    title: "Secondary tax codes"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/tax-codes-and-tax-rates-for-individuals/what-tax-code-should-i-use"
+    source_type: ird_guidance
+    title: "What tax code should I use?"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/tax-codes-and-tax-rates-for-individuals/tailored-tax-options"
+    source_type: ird_guidance
+    title: "Which tailored tax option is right for me?"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/tax-codes-and-tax-rates-for-individuals/apply-for-a-tailored-tax-code"
+    source_type: ird_guidance
+    title: "Apply for a tailored tax code"
+
+  # -- Types of individual income --
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/types-of-individual-income/earning-salary-and-wages"
+    source_type: ird_guidance
+    title: "Earning salary and wages"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/types-of-individual-income/hobbies-and-businesses"
+    source_type: ird_guidance
+    title: "Hobbies and businesses"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/types-of-individual-income/share-investments"
+    source_type: ird_guidance
+    title: "Share investments"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/types-of-individual-income/overseas-income"
+    source_type: ird_guidance
+    title: "Overseas income"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/types-of-individual-income/benefits-nz-superannuation-student-allowance"
+    source_type: ird_guidance
+    title: "Benefits, NZ superannuation and student allowance"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/types-of-individual-income/portfolio-investment-entity-income-for-individuals"
+    source_type: ird_guidance
+    title: "PIE income for individuals"
+
+  # -- Individual tax credits --
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/individual-tax-credits/independent-earner-tax-credit-ietc"
+    source_type: ird_guidance
+    title: "Independent earner tax credit (IETC)"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/individual-tax-credits/donation-tax-credits"
+    source_type: ird_guidance
+    title: "Donation tax credits"
+
+  # -- Withholding taxes --
+  - url: "https://www.ird.govt.nz/income-tax/withholding-taxes/resident-withholding-tax-rwt"
+    source_type: ird_guidance
+    title: "Resident withholding tax (RWT)"
+
+  - url: "https://www.ird.govt.nz/income-tax/withholding-taxes/schedular-payments"
+    source_type: ird_guidance
+    title: "Schedular payments"
+
+  # -- PIE / Investment income --
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/types-of-individual-income/portfolio-investment-entity-income-for-individuals/prescribed-investor-rates"
+    source_type: ird_guidance
+    title: "Prescribed investor rates (PIR)"
+
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/types-of-individual-income/portfolio-investment-entity-income-for-individuals/prescribed-investor-rates/find-my-prescribed-investor-rate"
+    source_type: ird_guidance
+    title: "Find my prescribed investor rate"
+
+  # === 1B. Working for Families ===
+  - url: "https://www.ird.govt.nz/working-for-families"
+    source_type: ird_guidance
+    title: "Working for Families"
+
+  - url: "https://www.ird.govt.nz/working-for-families/all-about-working-for-families"
+    source_type: ird_guidance
+    title: "All about Working for Families"
+
+  - url: "https://www.ird.govt.nz/working-for-families/types"
+    source_type: ird_guidance
+    title: "Working for Families - types of payment"
+
+  - url: "https://www.ird.govt.nz/working-for-families/can-you-get-it"
+    source_type: ird_guidance
+    title: "Can you get Working for Families?"
+
+  - url: "https://www.ird.govt.nz/working-for-families/estimate-your-entitlement"
+    source_type: ird_guidance
+    title: "Estimate your entitlement"
+
+  # === 1C. KiwiSaver ===
+  - url: "https://www.ird.govt.nz/kiwisaver"
+    source_type: ird_guidance
+    title: "KiwiSaver"
+
+  - url: "https://www.ird.govt.nz/kiwisaver/kiwisaver-individuals/how-kiwisaver-works"
+    source_type: ird_guidance
+    title: "How KiwiSaver works"
+
+  - url: "https://www.ird.govt.nz/kiwisaver/kiwisaver-individuals/employee-contributions"
+    source_type: ird_guidance
+    title: "KiwiSaver employee contributions"
+
+  - url: "https://www.ird.govt.nz/kiwisaver/kiwisaver-individuals/kiwisaver-benefits"
+    source_type: ird_guidance
+    title: "KiwiSaver benefits"
+
+  - url: "https://www.ird.govt.nz/kiwisaver/kiwisaver-individuals/taxing-kiwisaver-income"
+    source_type: ird_guidance
+    title: "How your KiwiSaver income is taxed"
+
+  - url: "https://www.ird.govt.nz/kiwisaver/kiwisaver-employers/contributions-and-deductions"
+    source_type: ird_guidance
+    title: "KiwiSaver contributions and deductions (employers)"
+
+  - url: "https://www.ird.govt.nz/kiwisaver-changes"
+    source_type: ird_guidance
+    title: "KiwiSaver changes (Budget 2025)"
+
+  # === 1D. Student Loans ===
+  - url: "https://www.ird.govt.nz/student-loans"
+    source_type: ird_guidance
+    title: "Student loans"
+
+  - url: "https://www.ird.govt.nz/student-loans/living-in-new-zealand-with-a-student-loan"
+    source_type: ird_guidance
+    title: "Living in NZ with a student loan"
+
+  - url: "https://www.ird.govt.nz/student-loans/living-in-new-zealand-with-a-student-loan/repaying-my-student-loan-when-i-earn-salary-or-wages"
+    source_type: ird_guidance
+    title: "Student loan repayment - salary or wages"
+
+  - url: "https://www.ird.govt.nz/student-loans/living-in-new-zealand-with-a-student-loan/repaying-my-student-loan-when-i-am-self-employed-or-earn-other-income"
+    source_type: ird_guidance
+    title: "Student loan repayment - self-employed"
+
+  - url: "https://www.ird.govt.nz/student-loans/living-overseas-with-a-student-loan"
+    source_type: ird_guidance
+    title: "Living overseas with a student loan"
+
+  # === 1G. Tax Technical (index pages) ===
+  - url: "https://www.taxtechnical.ird.govt.nz/questions-we-ve-been-asked"
+    source_type: interpretation_statement
+    title: "Questions we've been asked - index"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/interpretation-statements"
+    source_type: interpretation_statement
+    title: "Interpretation statements - index"
+
+  - url: "https://www.taxtechnical.ird.govt.nz/standard-practice-statements"
+    source_type: interpretation_statement
+    title: "Standard practice statements - index"
+
+  # === Tier 0 — Structured/Calculator PDFs ===
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/digital-service-providers/software-providers/payroll-calculations-business-rules-specifications/payroll-calculations-and-business-rules-specification-2026-v1.pdf"
+    source_type: guide_pdf
+    title: "Payroll Calculations and Business Rules Specification 2026"
+
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir300---ir399/ir340/ir340-2025.pdf"
+    source_type: guide_pdf
+    title: "IR340 PAYE deduction tables 2025"
+
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir200---ir299/ir271/ir271-2026.pdf"
+    source_type: guide_pdf
+    title: "IR271 Working for Families weekly payments chart 2026"
+
+  # === Tier 1 — PDF Guides ===
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir1---ir99/ir3g/ir3g-2025.pdf"
+    source_type: guide_pdf
+    title: "IR3G Individual income tax return guide 2025"
+
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir300---ir399/ir330/ir330.pdf"
+    source_type: guide_pdf
+    title: "IR330 Tax code declaration"
+
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir300---ir399/ir330c/ir330c-2024.pdf"
+    source_type: guide_pdf
+    title: "IR330C Tax rate notification for contractors"
+
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir1200---ir1299/ir1247/ir1247-2022.pdf"
+    source_type: guide_pdf
+    title: "IR1247 Foreign income guide"
+
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir800---ir899/ir860/ir860.pdf"
+    source_type: guide_pdf
+    title: "IR860 PIE guide"
+
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir200---ir299/ir257/ir257-2023.pdf"
+    source_type: guide_pdf
+    title: "IR257 Overseas pensions guide"

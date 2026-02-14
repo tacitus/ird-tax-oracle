@@ -1,0 +1,53 @@
+[project]
+name = "nz-tax-rag"
+version = "0.1.0"
+description = "NZ Personal Income Tax RAG System"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # API
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    # Database
+    "asyncpg>=0.30",
+    "pgvector>=0.3",
+    # LLM
+    "litellm>=1.60",
+    # Embeddings (google-genai SDK — bypasses LiteLLM for task_type support)
+    "google-genai>=1.0",
+    # RAG / ingestion
+    "httpx>=0.28",
+    "beautifulsoup4>=4.12",
+    "pymupdf>=1.25",
+    "lxml>=5.3",
+    # Migrations
+    "yoyo-migrations>=8.2",
+    "psycopg2-binary>=2.9",
+    # Config
+    "pydantic-settings>=2.7",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25",
+    "pytest-httpx>=0.35",
+    "ruff>=0.9",
+    "mypy>=1.14",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true

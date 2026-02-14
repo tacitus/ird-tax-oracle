@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NZ Tax Assistant</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <a href="#ask-form" class="skip-link">Skip to main content</a>
+
+  <header class="header">
+    <div class="header-inner">
+      <!-- Silver fern SVG -->
+      <svg class="header-fern" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M32 4c0 0-2 8-2 16s2 14 2 14 2-6 2-14S32 4 32 4z" fill="#c0c0c0" opacity="0.9"/>
+        <path d="M32 16c-4-2-12-3-16 0 4 1 10 2 16 4z" fill="#c0c0c0" opacity="0.8"/>
+        <path d="M32 16c4-2 12-3 16 0-4 1-10 2-16 4z" fill="#c0c0c0" opacity="0.8"/>
+        <path d="M32 24c-6-2-14-2-18 1 5 1 12 2 18 4z" fill="#c0c0c0" opacity="0.75"/>
+        <path d="M32 24c6-2 14-2 18 1-5 1-12 2-18 4z" fill="#c0c0c0" opacity="0.75"/>
+        <path d="M32 32c-7-1-16-1-20 2 6 1 13 2 20 4z" fill="#c0c0c0" opacity="0.7"/>
+        <path d="M32 32c7-1 16-1 20 2-6 1-13 2-20 4z" fill="#c0c0c0" opacity="0.7"/>
+        <path d="M32 40c-8 0-17 1-20 4 6 0 14 0 20 2z" fill="#c0c0c0" opacity="0.6"/>
+        <path d="M32 40c8 0 17 1 20 4-6 0-14 0-20 2z" fill="#c0c0c0" opacity="0.6"/>
+        <path d="M32 46c-6 1-12 4-14 8 5-2 10-4 14-6z" fill="#c0c0c0" opacity="0.5"/>
+        <path d="M32 46c6 1 12 4 14 8-5-2-10-4-14-6z" fill="#c0c0c0" opacity="0.5"/>
+        <rect x="31" y="48" width="2" height="12" rx="1" fill="#c0c0c0" opacity="0.9"/>
+      </svg>
+      <div>
+        <h1>NZ Tax Assistant</h1>
+        <p class="subtitle">Personal income tax guidance for New Zealand residents</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <aside class="disclaimer" aria-label="Disclaimer">
+      <strong>General guidance only.</strong> This tool provides information based on IRD published guidance and is not professional tax advice. Always confirm with a tax professional or <a href="https://www.ird.govt.nz" target="_blank" rel="noopener">ird.govt.nz<span class="visually-hidden"> (opens in new tab)</span></a> for your specific situation.
+    </aside>
+
+    <!-- Ask -->
+    <div class="ask-card">
+      <form id="ask-form" class="ask-form">
+        <label for="question" class="visually-hidden">Your tax question</label>
+        <textarea id="question" name="question" rows="1" placeholder="Ask a tax question..." required aria-required="true"></textarea>
+        <button type="submit" class="ask-btn">Ask</button>
+      </form>
+    </div>
+
+    <!-- Examples -->
+    <section class="examples-section" aria-labelledby="examples-heading">
+      <h2 id="examples-heading" class="examples-label">Common questions</h2>
+      <div class="examples-grid" role="group" aria-labelledby="examples-heading">
+        <button type="button" class="example-card" data-question="What are the current personal income tax brackets in New Zealand?">Tax brackets for the current year</button>
+        <button type="button" class="example-card" data-question="How do student loan repayments work for salary and wage earners?">Student loan repayments</button>
+        <button type="button" class="example-card" data-question="Am I eligible for the independent earner tax credit (IETC)?">Independent earner tax credit</button>
+        <button type="button" class="example-card" data-question="How does KiwiSaver affect my take-home pay and tax?">KiwiSaver and tax</button>
+        <button type="button" class="example-card" data-question="What tax code should I use if I have two jobs?">Tax codes for multiple jobs</button>
+        <button type="button" class="example-card" data-question="How do donation tax credits work in New Zealand?">Donation tax credits</button>
+      </div>
+    </section>
+
+    <!-- Loading -->
+    <div class="loading-section" hidden role="status" aria-live="polite">
+      <div class="loading-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="loading-text">Searching IRD guidance...</div>
+    </div>
+
+    <!-- Answer -->
+    <div class="answer-section" hidden tabindex="-1" aria-live="polite">
+      <div class="answer-content"></div>
+      <div class="sources">
+        <h2 class="sources-label">Sources</h2>
+        <ul class="sources-list"></ul>
+      </div>
+      <div class="model-attr"></div>
+      <button class="ask-another-btn">Ask another question</button>
+    </div>
+
+    <!-- Error -->
+    <div class="error-section" hidden tabindex="-1" role="alert">
+      <p></p>
+      <button class="retry-btn">Try again</button>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    Information sourced from <a href="https://www.ird.govt.nz" target="_blank" rel="noopener">Inland Revenue<span class="visually-hidden"> (opens in new tab)</span></a> published guidance.<br>
+    Not a substitute for professional tax advice. Use at your own discretion.
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

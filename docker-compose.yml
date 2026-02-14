@@ -1,0 +1,70 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: nz_tax
+      POSTGRES_USER: taxapp
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taxapp -d nz_tax"]
+      interval: 5s
+      retries: 5
+
+  migrate:
+    build: .
+    command: python scripts/migrate.py
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://taxapp:${DB_PASSWORD}@db:5432/nz_tax
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    command: uvicorn src.api.app:create_app --host 0.0.0.0 --port 8000 --factory
+    ports:
+      - "8008:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://taxapp:${DB_PASSWORD}@db:5432/nz_tax
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./config:/app/config
+      - ./static:/app/static
+
+  # Dev/test runner — usage:
+  #   docker compose run --rm dev pytest
+  #   docker compose run --rm dev python scripts/migrate.py
+  #   docker compose run --rm dev python scripts/ingest.py --url "..."
+  dev:
+    build: .
+    command: bash
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://taxapp:${DB_PASSWORD}@db:5432/nz_tax
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+
+  # Optional: local LLM via Ollama
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    profiles:
+      - local-llm  # only starts with: docker compose --profile local-llm up
+
+volumes:
+  pgdata:
+  ollama_data:

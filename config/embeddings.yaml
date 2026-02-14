@@ -1,0 +1,7 @@
+embeddings:
+  provider: "gemini"
+  model: "gemini-embedding-001"
+  dimensions: 768
+  task_type_document: "RETRIEVAL_DOCUMENT"
+  task_type_query: "RETRIEVAL_QUERY"
+  # API key: uses GEMINI_API_KEY from environment (same as LLM)

@@ -1,0 +1,96 @@
+---
+title: NZ Personal Income Tax — RAG System Architecture
+---
+graph TB
+    subgraph Client["Client Layer"]
+        API_CLIENT["API Consumer<br/>(Web App / CLI / Chat UI)"]
+    end
+
+    subgraph API["API Layer — FastAPI"]
+        ROUTER["Router<br/>POST /ask"]
+        ORCHESTRATOR["Orchestrator<br/>(Query → Retrieve → LLM → Answer)"]
+    end
+
+    subgraph LLM_LAYER["LLM Gateway — LiteLLM (Swappable)"]
+        LITELLM["LiteLLM<br/>Unified Interface"]
+        GEMINI_FLASH["Gemini 2.5 Flash<br/>(default)"]
+        GEMINI_PRO["Gemini 2.5 Pro<br/>(fallback)"]
+        OLLAMA_LLM["Ollama<br/>(local fallback)"]
+        LITELLM --> GEMINI_FLASH & GEMINI_PRO & OLLAMA_LLM
+    end
+
+    subgraph RAG["RAG Pipeline"]
+        direction TB
+        RETRIEVER["Hybrid Retriever"]
+        SEMANTIC["Semantic Search<br/>(pgvector cosine)"]
+        KEYWORD["Keyword Search<br/>(tsvector FTS)"]
+        RRF["Reciprocal Rank<br/>Fusion"]
+        RETRIEVER --> SEMANTIC & KEYWORD
+        SEMANTIC --> RRF
+        KEYWORD --> RRF
+    end
+
+    subgraph DB["PostgreSQL + pgvector"]
+        DOC_SOURCES[("document_sources<br/>URLs, crawl state,<br/>content hashes")]
+        DOC_CHUNKS[("document_chunks<br/>content + embeddings<br/>+ tsvector + metadata")]
+        QUERY_LOG[("query_log<br/>Q&A pairs + feedback")]
+        TAX_RULES[("tax_brackets<br/>(Phase 2)")]
+    end
+
+    subgraph Ingestion["Ingestion Pipeline (offline / triggered)"]
+        direction LR
+        CRAWLER["Crawler<br/>(httpx)"]
+        PARSER["Parser<br/>(BS4 / pymupdf)"]
+        CHUNKER["Tax-Aware<br/>Chunker"]
+        EMBEDDER["Embedder<br/>(configurable)"]
+        CRAWLER --> PARSER --> CHUNKER --> EMBEDDER
+    end
+
+    subgraph Sources["Document Sources"]
+        IRD["IRD Guidance<br/>ird.govt.nz"]
+        TAXTECHNICAL["Tax Technical<br/>taxtechnical.ird.govt.nz"]
+        LEGISLATION["Income Tax Act 2007<br/>legislation.govt.nz"]
+        GUIDES["PDF Guides<br/>IR3G, IR3, etc."]
+    end
+
+    subgraph Embedding["Embedding Service (google-genai SDK)"]
+        GEMINI_EMB["Gemini<br/>gemini-embedding-001<br/>(768 dims, task_type aware)"]
+        OLLAMA_EMB["Ollama<br/>nomic-embed-text<br/>(local alternative)"]
+    end
+
+    %% Main query flow
+    API_CLIENT -->|"POST /ask"| ROUTER
+    ROUTER --> ORCHESTRATOR
+    ORCHESTRATOR -->|"1. Retrieve context"| RETRIEVER
+    RRF -->|"Top-k chunks"| ORCHESTRATOR
+    ORCHESTRATOR -->|"2. Query + context<br/>+ tool defs"| LITELLM
+    LITELLM -->|"3. Answer + citations"| ORCHESTRATOR
+    ORCHESTRATOR -->|"4. Log"| QUERY_LOG
+    ORCHESTRATOR -->|"Structured answer"| API_CLIENT
+
+    %% RAG reads from DB
+    SEMANTIC -->|"cosine similarity"| DOC_CHUNKS
+    KEYWORD -->|"ts_rank"| DOC_CHUNKS
+
+    %% Ingestion flow
+    Sources --> CRAWLER
+    EMBEDDER -->|"Store chunks<br/>+ vectors"| DOC_CHUNKS
+    EMBEDDER -->|"Update crawl state"| DOC_SOURCES
+    EMBEDDER -.->|"Uses"| Embedding
+
+    %% Retriever also uses embedding for query
+    RETRIEVER -.->|"Embed query"| Embedding
+
+    classDef primary fill:#2563eb,stroke:#1e40af,color:#fff
+    classDef llm fill:#dc2626,stroke:#b91c1c,color:#fff
+    classDef rag fill:#d97706,stroke:#b45309,color:#fff
+    classDef data fill:#7c3aed,stroke:#6d28d9,color:#fff
+    classDef source fill:#059669,stroke:#047857,color:#fff
+    classDef embed fill:#be185d,stroke:#9d174d,color:#fff
+
+    class ROUTER,ORCHESTRATOR primary
+    class LITELLM,GEMINI_FLASH,GEMINI_PRO,OLLAMA_LLM llm
+    class RETRIEVER,SEMANTIC,KEYWORD,RRF,CRAWLER,PARSER,CHUNKER,EMBEDDER rag
+    class DOC_SOURCES,DOC_CHUNKS,QUERY_LOG,TAX_RULES data
+    class IRD,TAXTECHNICAL,LEGISLATION,GUIDES source
+    class GEMINI_EMB,OLLAMA_EMB embed
