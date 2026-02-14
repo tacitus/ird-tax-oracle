@@ -18,7 +18,7 @@ dependencies = [
     # RAG / ingestion
     "httpx>=0.28",
     "beautifulsoup4>=4.12",
-    "pymupdf>=1.25",
+    "pymupdf4llm>=0.2",
     "lxml>=5.3",
     # Migrations
     "yoyo-migrations>=8.2",

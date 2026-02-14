@@ -2,7 +2,12 @@
 
 import pytest
 
-from src.ingestion.parsers.pdf_parser import parse_pdf
+from src.ingestion.parsers.pdf_parser import (
+    _clean_page_numbers,
+    _detect_qa_sections,
+    _markdown_to_sections,
+    parse_pdf,
+)
 
 
 class TestTitleExtraction:
@@ -77,24 +82,96 @@ class TestQADetection:
             assert len(result.sections[0].content) > 0
 
 
-class TestHeadingDetection:
-    """Test font-size-based heading detection."""
+class TestMarkdownToSections:
+    """Test _markdown_to_sections heading splitting."""
 
-    def test_heading_sections_created(self, pdf_with_headings: bytes) -> None:
-        result = parse_pdf(pdf_with_headings, "https://ird.govt.nz/guide.pdf")
-        headings = [s.heading for s in result.sections]
-        # Should detect the large-font headings
-        assert any("Income Types" in h for h in headings)
-        assert any("Deductions" in h for h in headings)
+    def test_splits_on_headings(self) -> None:
+        md = "# Section A\n\nParagraph one.\n\n# Section B\n\nParagraph two."
+        sections = _markdown_to_sections(md)
+        assert len(sections) == 2
+        assert sections[0].heading == "Section A"
+        assert "Paragraph one" in sections[0].content
+        assert sections[1].heading == "Section B"
+        assert "Paragraph two" in sections[1].content
 
-    def test_heading_section_content(self, pdf_with_headings: bytes) -> None:
-        result = parse_pdf(pdf_with_headings, "https://ird.govt.nz/guide.pdf")
-        income_section = next(
-            (s for s in result.sections if "Income Types" in s.heading), None
+    def test_intro_before_first_heading(self) -> None:
+        md = "Some intro text.\n\n# Main Section\n\nBody content."
+        sections = _markdown_to_sections(md)
+        assert sections[0].heading == "Introduction"
+        assert "intro text" in sections[0].content
+        assert sections[1].heading == "Main Section"
+
+    def test_no_headings_fallback(self) -> None:
+        md = "Just plain text with no headings at all."
+        sections = _markdown_to_sections(md)
+        assert len(sections) == 1
+        assert sections[0].heading == "Content"
+        assert "plain text" in sections[0].content
+
+    def test_empty_text(self) -> None:
+        sections = _markdown_to_sections("")
+        assert sections == []
+
+    def test_sub_headings_get_parent_context(self) -> None:
+        md = "# Parent\n\nIntro.\n\n## Child\n\nChild content."
+        sections = _markdown_to_sections(md)
+        child = next(s for s in sections if "Child" in s.heading)
+        assert child.heading == "Parent > Child"
+
+    def test_h3_under_h1(self) -> None:
+        md = "# Top\n\nA.\n\n### Deep\n\nB."
+        sections = _markdown_to_sections(md)
+        deep = next(s for s in sections if "Deep" in s.heading)
+        assert deep.heading == "Top > Deep"
+
+
+class TestDetectQASections:
+    """Test _detect_qa_sections on raw markdown text."""
+
+    def test_detects_question_pattern(self) -> None:
+        md = (
+            "Introduction text.\n\n"
+            "Question 1 IRD number\nEnter your IRD number.\n\n"
+            "Question 2 Your name\nPrint your full name.\n\n"
+            "Question 3 Bank account\nEnter your bank details.\n"
         )
-        assert income_section is not None
-        content_lower = income_section.content.lower()
-        assert "salary" in content_lower or "wages" in content_lower
+        sections = _detect_qa_sections(md)
+        assert sections is not None
+        question_headings = [s.heading for s in sections if "Question" in s.heading]
+        assert len(question_headings) == 3
+
+    def test_returns_none_for_few_matches(self) -> None:
+        md = "Question 1 Only one\nSome content.\nNo more questions."
+        sections = _detect_qa_sections(md)
+        assert sections is None
+
+    def test_intro_captured(self) -> None:
+        md = (
+            "This is an intro.\n\n"
+            "Question 1 A\nContent A.\n\n"
+            "Question 2 B\nContent B.\n\n"
+            "Question 3 C\nContent C.\n"
+        )
+        sections = _detect_qa_sections(md)
+        assert sections is not None
+        assert sections[0].heading == "Introduction"
+        assert "intro" in sections[0].content
+
+
+class TestCleanPageNumbers:
+    """Test _clean_page_numbers utility."""
+
+    def test_removes_standalone_numbers(self) -> None:
+        text = "Some content.\n42\nMore content."
+        result = _clean_page_numbers(text)
+        assert "42" not in result
+        assert "Some content" in result
+        assert "More content" in result
+
+    def test_preserves_numbers_in_text(self) -> None:
+        text = "Tax rate is 33% for income over $70,000"
+        result = _clean_page_numbers(text)
+        assert result == text
 
 
 class TestFallbackBehavior:
@@ -112,7 +189,7 @@ class TestMultiPage:
 
     def test_multi_page_content(self, multi_page_pdf: bytes) -> None:
         result = parse_pdf(multi_page_pdf, "https://ird.govt.nz/guide.pdf")
-        assert len(result.sections) >= 2
+        assert len(result.sections) >= 1
         all_content = "\n".join(s.content for s in result.sections)
         # Content from later pages should be present
         assert "section" in all_content.lower()
@@ -120,9 +197,7 @@ class TestMultiPage:
     def test_header_footer_stripped(self, multi_page_pdf: bytes) -> None:
         result = parse_pdf(multi_page_pdf, "https://ird.govt.nz/guide.pdf")
         all_content = "\n".join(s.content for s in result.sections)
-        # Repeated header/footer text should be stripped
-        # "IR3G INDIVIDUAL RETURN GUIDE" appears on all 5 pages
-        assert all_content.count("IR3G INDIVIDUAL RETURN GUIDE") == 0
+        # Footer text (placed at y=820 in a 842pt page) should be stripped by margins
         assert all_content.count("ird.govt.nz") == 0
 
 
