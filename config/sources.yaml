@@ -75,10 +75,6 @@ sources:
     source_type: ird_guidance
     title: "Independent earner tax credit (IETC)"
 
-  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/individual-tax-credits/independent-earner-tax-credit"
-    source_type: ird_guidance
-    title: "Independent earner tax credit"
-
   - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/individual-tax-credits/donation-tax-credits"
     source_type: ird_guidance
     title: "Donation tax credits"

@@ -53,10 +53,19 @@ def _detect_tax_year(text: str) -> str | None:
 
 
 def _build_metadata_prefix(page_title: str, section: ParsedSection) -> str:
-    """Build [Page Title > Section Heading] prefix for a chunk."""
+    """Build [Page Title > Section Heading] prefix for a chunk.
+
+    Avoids duplicating the page title when the section heading already
+    starts with it (e.g. pymupdf4llm h1 matching the PDF title).
+    """
+    heading = section.heading
     if section.parent_heading:
-        return f"[{page_title} > {section.parent_heading} > {section.heading}]"
-    return f"[{page_title} > {section.heading}]"
+        heading = f"{section.parent_heading} > {section.heading}"
+
+    # Skip title prefix if heading already starts with it
+    if heading.startswith(page_title):
+        return f"[{heading}]"
+    return f"[{page_title} > {heading}]"
 
 
 def _extract_last_sentences(text: str, n: int = 2) -> str:

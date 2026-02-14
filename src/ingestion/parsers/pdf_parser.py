@@ -69,7 +69,7 @@ def _pdf_to_markdown(doc: Any) -> str:
         doc,
         write_images=False,
         show_progress=False,
-        margins=(0, 50, 0, 50),  # (left, top, right, bottom) — strip header/footer zones
+        margins=(0, 50, 0, 30),  # (left, top, right, bottom) — strip headers, light bottom clip
     )
     return md_text
 

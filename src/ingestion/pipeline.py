@@ -42,13 +42,24 @@ class IngestionPipeline:
         return row["content_hash"] if row else None
 
     async def _embed_chunks(self, chunks: list[ChunkData]) -> list[list[float]]:
-        """Embed all chunks in batches with rate-limit delays."""
+        """Embed all chunks in batches with rate-limit retry."""
         all_embeddings: list[list[float]] = []
         texts = [c.content for c in chunks]
 
         for i in range(0, len(texts), _EMBED_BATCH_SIZE):
             batch = texts[i : i + _EMBED_BATCH_SIZE]
-            embeddings = await self.embedder.embed_documents(batch)
+            # Retry with exponential backoff on rate limit errors
+            for attempt in range(4):
+                try:
+                    embeddings = await self.embedder.embed_documents(batch)
+                    break
+                except Exception as e:
+                    if "429" in str(e) and attempt < 3:
+                        wait = 5 * (attempt + 1)  # 5, 10, 15 seconds
+                        logger.warning("Rate limited, retrying in %ds...", wait)
+                        await asyncio.sleep(wait)
+                    else:
+                        raise
             all_embeddings.extend(embeddings)
             logger.info(
                 "Embedded batch %d-%d of %d",
@@ -56,9 +67,11 @@ class IngestionPipeline:
                 min(i + _EMBED_BATCH_SIZE, len(texts)),
                 len(texts),
             )
-            # Brief delay between batches to avoid Gemini API rate limits
+            # Delay between batches to avoid Gemini API rate limits
+            # Longer delay for large documents (>100 chunks)
             if i + _EMBED_BATCH_SIZE < len(texts):
-                await asyncio.sleep(1.0)
+                delay = 4.0 if len(texts) > 100 else 1.0
+                await asyncio.sleep(delay)
 
         return all_embeddings
 

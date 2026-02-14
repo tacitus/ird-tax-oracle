@@ -88,6 +88,8 @@ class RetrievalResult(BaseModel):
     section_title: str | None = None
     source_url: str
     source_title: str | None = None
+    source_type: str | None = None
+    tax_year: str | None = None
     score: float
 
 

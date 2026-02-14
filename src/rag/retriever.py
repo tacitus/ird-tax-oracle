@@ -50,8 +50,9 @@ class HybridRetriever:
         """Cosine-distance search via pgvector HNSW index."""
         rows = await conn.fetch(
             """
-            SELECT c.content, c.section_title,
+            SELECT c.content, c.section_title, c.tax_year,
                    s.url AS source_url, s.title AS source_title,
+                   s.source_type,
                    c.embedding <=> $1 AS distance
             FROM document_chunks c
             JOIN document_sources s ON s.id = c.source_id
@@ -67,6 +68,8 @@ class HybridRetriever:
                 section_title=r["section_title"],
                 source_url=r["source_url"],
                 source_title=r["source_title"],
+                source_type=r["source_type"],
+                tax_year=r["tax_year"],
                 score=1.0 - float(r["distance"]),  # convert distance to similarity
             )
             for r in rows
@@ -81,8 +84,9 @@ class HybridRetriever:
         """Full-text search using tsvector index."""
         rows = await conn.fetch(
             """
-            SELECT c.content, c.section_title,
+            SELECT c.content, c.section_title, c.tax_year,
                    s.url AS source_url, s.title AS source_title,
+                   s.source_type,
                    ts_rank_cd(c.search_vector, plainto_tsquery('english', $1)) AS rank
             FROM document_chunks c
             JOIN document_sources s ON s.id = c.source_id
@@ -99,6 +103,8 @@ class HybridRetriever:
                 section_title=r["section_title"],
                 source_url=r["source_url"],
                 source_title=r["source_title"],
+                source_type=r["source_type"],
+                tax_year=r["tax_year"],
                 score=float(r["rank"]),
             )
             for r in rows
