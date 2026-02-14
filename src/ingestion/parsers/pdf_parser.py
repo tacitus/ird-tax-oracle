@@ -313,7 +313,9 @@ def _collect_text(blocks: list[_TextBlock | _TableBlock]) -> str:
             parts.append(block.markdown)
         else:
             parts.append(block.text)
-    return "\n\n".join(parts)
+    # Strip null bytes — PyMuPDF can extract \x00 from some PDFs,
+    # and PostgreSQL rejects them in text fields
+    return "\n\n".join(parts).replace("\x00", "")
 
 
 def _clean_page_numbers(text: str) -> str:

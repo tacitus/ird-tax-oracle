@@ -4,6 +4,7 @@ Orchestrates the full flow from URL to stored chunks in PostgreSQL.
 Supports upsert semantics with content hash change detection.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -41,7 +42,7 @@ class IngestionPipeline:
         return row["content_hash"] if row else None
 
     async def _embed_chunks(self, chunks: list[ChunkData]) -> list[list[float]]:
-        """Embed all chunks in batches."""
+        """Embed all chunks in batches with rate-limit delays."""
         all_embeddings: list[list[float]] = []
         texts = [c.content for c in chunks]
 
@@ -55,6 +56,9 @@ class IngestionPipeline:
                 min(i + _EMBED_BATCH_SIZE, len(texts)),
                 len(texts),
             )
+            # Brief delay between batches to avoid Gemini API rate limits
+            if i + _EMBED_BATCH_SIZE < len(texts):
+                await asyncio.sleep(1.0)
 
         return all_embeddings
 

@@ -16,6 +16,10 @@ sources:
     source_type: ird_guidance
     title: "What happens at the end of the tax year"
 
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/what-happens-at-the-end-of-the-tax-year/individual-income-tax-return---ir3"
+    source_type: ird_guidance
+    title: "Individual income tax return - IR3"
+
   # -- Tax codes and rates --
   - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/tax-codes-and-tax-rates-for-individuals/tax-rates-for-individuals"
     source_type: ird_guidance
@@ -71,6 +75,10 @@ sources:
     source_type: ird_guidance
     title: "Independent earner tax credit (IETC)"
 
+  - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/individual-tax-credits/independent-earner-tax-credit"
+    source_type: ird_guidance
+    title: "Independent earner tax credit"
+
   - url: "https://www.ird.govt.nz/income-tax/income-tax-for-individuals/individual-tax-credits/donation-tax-credits"
     source_type: ird_guidance
     title: "Donation tax credits"
@@ -114,10 +122,19 @@ sources:
     source_type: ird_guidance
     title: "Estimate your entitlement"
 
+  # === 1B2. FamilyBoost ===
+  - url: "https://www.ird.govt.nz/familyboost"
+    source_type: ird_guidance
+    title: "FamilyBoost"
+
   # === 1C. KiwiSaver ===
   - url: "https://www.ird.govt.nz/kiwisaver"
     source_type: ird_guidance
     title: "KiwiSaver"
+
+  - url: "https://www.ird.govt.nz/kiwisaver/kiwisaver-individuals"
+    source_type: ird_guidance
+    title: "KiwiSaver for individuals"
 
   - url: "https://www.ird.govt.nz/kiwisaver/kiwisaver-individuals/how-kiwisaver-works"
     source_type: ird_guidance
@@ -185,6 +202,10 @@ sources:
   - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir300---ir399/ir340/ir340-2025.pdf"
     source_type: guide_pdf
     title: "IR340 PAYE deduction tables 2025"
+
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir300---ir399/ir341/ir341-2025.pdf"
+    source_type: guide_pdf
+    title: "IR341 PAYE deduction tables (4-weekly/monthly) 2025"
 
   - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir200---ir299/ir271/ir271-2026.pdf"
     source_type: guide_pdf
