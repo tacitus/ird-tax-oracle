@@ -178,6 +178,7 @@ body {
 /* === Focus Indicators === */
 .ask-btn:focus-visible,
 .ask-another-btn:focus-visible,
+.copy-link-btn:focus-visible,
 .retry-btn:focus-visible,
 .example-card:focus-visible {
   outline: 2px solid var(--color-teal);
@@ -395,10 +396,15 @@ body {
   color: var(--color-grey-600);
 }
 
-/* Ask Another button */
-.ask-another-btn {
-  display: inline-block;
+/* Answer action buttons */
+.answer-actions {
+  display: flex;
+  gap: 0.5rem;
   margin-top: 1rem;
+}
+
+.ask-another-btn,
+.copy-link-btn {
   background: none;
   border: 1.5px solid var(--color-grey-200);
   border-radius: var(--radius);
@@ -410,9 +416,15 @@ body {
   transition: border-color var(--transition), color var(--transition);
 }
 
-.ask-another-btn:hover {
+.ask-another-btn:hover,
+.copy-link-btn:hover {
   border-color: var(--color-teal);
   color: var(--color-teal);
+}
+
+.copy-link-btn.copied {
+  border-color: #2a7d4f;
+  color: #2a7d4f;
 }
 
 /* === Error === */

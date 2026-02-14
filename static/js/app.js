@@ -14,6 +14,24 @@ const sections = {
 
 let lastQuestion = "";
 
+/* URL permalink helpers */
+function setQueryParam(question) {
+  if (question.length > 1800) return;
+  const url = new URL(window.location);
+  url.searchParams.set("q", question);
+  history.replaceState(null, "", url);
+}
+
+function clearQueryParam() {
+  const url = new URL(window.location);
+  url.searchParams.delete("q");
+  history.replaceState(null, "", url.pathname);
+}
+
+function getQueryParam() {
+  return new URLSearchParams(window.location.search).get("q");
+}
+
 function showState(state) {
   sections.loading.hidden = state !== "loading";
   sections.answer.hidden = state !== "answer";
@@ -47,6 +65,7 @@ form.addEventListener("submit", async (e) => {
 });
 
 async function submitQuestion(question) {
+  setQueryParam(question);
   showState("loading");
 
   const controller = new AbortController();
@@ -144,16 +163,56 @@ document.querySelectorAll(".example-card").forEach((card) => {
 
 /* Ask another */
 $(".ask-another-btn").addEventListener("click", () => {
+  clearQueryParam();
   textarea.value = "";
   textarea.style.height = "auto";
   showState("empty");
   textarea.focus();
 });
 
+/* Copy link */
+$(".copy-link-btn").addEventListener("click", () => {
+  const btn = $(".copy-link-btn");
+  const url = window.location.href;
+
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(() => showCopied(btn));
+  } else {
+    /* Fallback for insecure contexts */
+    const ta = document.createElement("textarea");
+    ta.value = url;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    showCopied(btn);
+  }
+});
+
+function showCopied(btn) {
+  btn.textContent = "Copied!";
+  btn.classList.add("copied");
+  setTimeout(() => {
+    btn.textContent = "Copy link";
+    btn.classList.remove("copied");
+  }, 2000);
+}
+
 /* Retry */
 $(".retry-btn").addEventListener("click", () => {
   if (lastQuestion) submitQuestion(lastQuestion);
 });
 
-/* Initial state */
-showState("empty");
+/* Initial state — auto-submit if ?q= is present */
+const initialQuery = getQueryParam();
+if (initialQuery) {
+  textarea.value = initialQuery;
+  textarea.style.height = "auto";
+  textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px";
+  lastQuestion = initialQuery;
+  submitQuestion(initialQuery);
+} else {
+  showState("empty");
+}
