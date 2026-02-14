@@ -11,7 +11,7 @@ cp .env.example .env
 docker compose up
 ```
 
-Verify: `curl http://localhost:8000/health`
+Verify: `curl http://localhost:8008/health`
 
 ## Development
 
