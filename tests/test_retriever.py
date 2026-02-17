@@ -1,7 +1,11 @@
-"""Tests for RRF fusion logic in the hybrid retriever."""
+"""Tests for RRF fusion logic and HybridRetriever.search()."""
+
+from unittest.mock import AsyncMock
+
+import pytest
 
 from src.db.models import RetrievalResult
-from src.rag.retriever import rrf_fuse
+from src.rag.retriever import HybridRetriever, rrf_fuse
 
 _RRF_K = 60
 
@@ -59,4 +63,73 @@ def test_rrf_fuse_respects_top_k() -> None:
 def test_rrf_fuse_empty_lists() -> None:
     """Empty input lists return empty results."""
     results = rrf_fuse([], [], top_k=5)
+    assert results == []
+
+
+# --- HybridRetriever.search() tests ---
+
+
+def _make_db_row(
+    content: str = "Tax info",
+    source_url: str = "https://ird.govt.nz/a",
+    distance: float = 0.2,
+    rank: float = 0.8,
+) -> dict:  # type: ignore[type-arg]
+    """Build a dict matching asyncpg Row for semantic/keyword queries."""
+    return {
+        "content": content,
+        "section_title": "Section",
+        "tax_year": None,
+        "source_url": source_url,
+        "source_title": "Test Doc",
+        "source_type": "ird_guidance",
+        "distance": distance,
+        "rank": rank,
+    }
+
+
+@pytest.mark.asyncio
+async def test_search_calls_embed_and_both_searches(
+    mock_embedder: AsyncMock, mock_db_pool: AsyncMock
+) -> None:
+    """search() calls embedder and runs both semantic + keyword queries."""
+    retriever = HybridRetriever(mock_db_pool, mock_embedder)
+    await retriever.search("PAYE rates")
+
+    mock_embedder.embed_query.assert_awaited_once_with("PAYE rates")
+    conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+    assert conn.fetch.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_search_returns_fused_results(
+    mock_embedder: AsyncMock, mock_db_pool: AsyncMock
+) -> None:
+    """Results from both queries are fused via RRF."""
+    semantic_row = _make_db_row(content="Semantic hit", source_url="https://ird.govt.nz/s")
+    keyword_row = _make_db_row(content="Keyword hit", source_url="https://ird.govt.nz/k")
+
+    conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+    conn.fetch.side_effect = [[semantic_row], [keyword_row]]
+
+    retriever = HybridRetriever(mock_db_pool, mock_embedder)
+    results = await retriever.search("test query", top_k=5)
+
+    assert len(results) == 2
+    contents = {r.content for r in results}
+    assert "Semantic hit" in contents
+    assert "Keyword hit" in contents
+
+
+@pytest.mark.asyncio
+async def test_search_empty_results(
+    mock_embedder: AsyncMock, mock_db_pool: AsyncMock
+) -> None:
+    """No hits from either query returns empty list."""
+    conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+    conn.fetch.side_effect = [[], []]
+
+    retriever = HybridRetriever(mock_db_pool, mock_embedder)
+    results = await retriever.search("obscure query")
+
     assert results == []

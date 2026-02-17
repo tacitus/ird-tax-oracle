@@ -1,11 +1,92 @@
 """Shared test fixtures."""
 
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pymupdf
 import pytest
 
+from src.db.models import RetrievalResult
+from src.llm.gateway import CompletionResult
+
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+# --- Mock factories for orchestrator / retriever / LLM tests ---
+
+
+def _make_retrieval_result(
+    content: str = "Tax rate is 39%",
+    source_url: str = "https://ird.govt.nz/rates",
+    source_title: str = "Tax rates",
+    section_title: str | None = "Individual rates",
+    source_type: str = "ird_guidance",
+    score: float = 0.5,
+) -> RetrievalResult:
+    return RetrievalResult(
+        content=content,
+        section_title=section_title,
+        source_url=source_url,
+        source_title=source_title,
+        source_type=source_type,
+        score=score,
+    )
+
+
+@pytest.fixture
+def mock_retriever() -> AsyncMock:
+    """Async mock of HybridRetriever returning canned results."""
+    retriever = AsyncMock()
+    retriever.search.return_value = [
+        _make_retrieval_result(),
+        _make_retrieval_result(
+            content="PAYE is deducted by your employer.",
+            source_url="https://ird.govt.nz/paye",
+            source_title="PAYE",
+            section_title="How PAYE works",
+        ),
+    ]
+    return retriever
+
+
+@pytest.fixture
+def mock_llm() -> AsyncMock:
+    """Async mock of LLMGateway returning a simple text completion."""
+    llm = AsyncMock()
+    llm.complete.return_value = CompletionResult(
+        content="The top tax rate is 39%.",
+        tool_calls=None,
+        raw_message=MagicMock(),
+        model="gemini/gemini-2.5-flash",
+    )
+    return llm
+
+
+@pytest.fixture
+def mock_embedder() -> AsyncMock:
+    """Async mock of GeminiEmbedder returning a fixed 768-dim vector."""
+    embedder = AsyncMock()
+    embedder.embed_query.return_value = [0.1] * 768
+    return embedder
+
+
+@pytest.fixture
+def mock_db_pool() -> MagicMock:
+    """Mock of asyncpg.Pool with context-managed acquire().
+
+    asyncpg.Pool.acquire() returns an async context manager (not a coroutine),
+    so we use MagicMock for the pool and configure __aenter__/__aexit__ manually.
+    """
+    conn = AsyncMock()
+    conn.fetch.return_value = []
+
+    acm = MagicMock()
+    acm.__aenter__ = AsyncMock(return_value=conn)
+    acm.__aexit__ = AsyncMock(return_value=False)
+
+    pool = MagicMock()
+    pool.acquire.return_value = acm
+    return pool
 
 
 @pytest.fixture
