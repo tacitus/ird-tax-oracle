@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 NZ Personal Income Tax RAG system — answers personal income tax questions for New Zealand residents using IRD official guidance and legislation. Uses hybrid retrieval (semantic + keyword search with RRF) over a PostgreSQL/pgvector corpus, with Gemini LLM via LiteLLM.
 
-**Status:** Iteration 1 complete — ingestion pipeline operational (crawler, HTML parser, tax-aware chunker, Gemini embedder, pgvector storage). 41 IRD sources ingested, 141 chunks with embeddings.
+**Status:** Iteration 1 complete — ingestion pipeline operational (crawler, HTML parser, taxtechnical parser, tax-aware chunker, Gemini embedder, pgvector storage). Two source collections: `sources.yaml` (IRD guidance) and `sources_taxtechnical.yaml` (taxtechnical.ird.govt.nz). Frontend and Basic Auth in place.
 
 ## Commands
 
@@ -31,37 +31,49 @@ docker compose run --rm dev python scripts/ingest.py --url "..."  # Ingest singl
 
 Three-layer system: **API (FastAPI)** → **Orchestrator** → **LLM Gateway (LiteLLM)** + **RAG Retriever (hybrid search)**
 
-Offline **Ingestion Pipeline**: Crawler (httpx) → Parser (BS4/PyMuPDF) → Tax-aware Chunker → Embedder → pgvector
+Offline **Ingestion Pipeline**: Crawler (httpx) → Parser (BS4/pymupdf4llm) → Tax-aware Chunker → Embedder → pgvector
 
 ### Key modules in `src/`
 
-- `api/` — FastAPI app factory (`create_app()`), routes (`/ask`, `/health`, `/admin/*`), dependency injection
-- `llm/` — LiteLLM wrapper (`gateway.py`), system prompts, tool definitions in OpenAI format
-- `rag/` — Hybrid retriever (semantic + keyword + RRF), embedding service, optional reranker
-- `ingestion/` — HTTP crawler, HTML/PDF parsers, tax-aware chunker, pipeline orchestrator
-- `orchestrator/` — Query→retrieve→LLM→answer flow
-- `db/` — asyncpg connection pool, Pydantic models
-- `calculators/` — Deterministic tax calculations (Phase 2, tool-callable by LLM)
+- `api/` — FastAPI app factory (`create_app()` in `app.py`), routes (`/`, `/ask`, `/health`, `/favicon.ico` in `routes.py`), Basic Auth middleware, DI via `app.state`
+- `llm/` — LiteLLM wrapper (`gateway.py`), system prompts (`prompts.py`), tool definitions (`tools.py`), LLM response postprocessor (`postprocess.py`)
+- `rag/` — Hybrid retriever (semantic + keyword + RRF in `retriever.py`), async embedding service (`embedder.py`)
+- `ingestion/` — HTTP crawler (`crawler.py`), parsers (`parsers/html_parser.py`, `parsers/pdf_parser.py`, `parsers/taxtechnical_parser.py`), tax-aware chunker (`chunker.py`), pipeline orchestrator (`pipeline.py`)
+- `orchestrator.py` — Query→retrieve→LLM→answer flow (flat module, not a package)
+- `db/` — asyncpg connection pool (`session.py`), Pydantic models (`models.py`)
 
 ### Database
 
 - PostgreSQL 17 + pgvector (`pgvector/pgvector:pg17` image)
 - Schema managed by **yoyo-migrations** in `migrations/`
-- Core tables: `document_sources`, `document_chunks` (with `vector(768)` + `tsvector`), `tax_brackets`, `query_log`
+- Core tables: `document_sources` (with `identifier`, `issue_date`, `superseded_by` metadata), `document_chunks` (with `vector(768)` + `tsvector`)
+- Source types: `ird_guidance`, `legislation`, `tib`, `guide_pdf`, `interpretation_statement`, `qwba`, `fact_sheet`, `operational_statement`
 - HNSW index on embeddings (not IVFFlat — works on empty tables)
+- Planned tables (Phase 2): `tax_years`, `tax_brackets`, `query_log`
 
 ### Embeddings
 
 - Model: `gemini-embedding-001` at 768 dimensions
 - Uses `google-genai` SDK directly (NOT LiteLLM) to preserve `task_type` parameter for asymmetric retrieval (`RETRIEVAL_DOCUMENT` vs `RETRIEVAL_QUERY`)
+- Async API (`client.aio.models.embed_content`) with batch support (`embed_documents`)
 - Same `GEMINI_API_KEY` as LLM
 
 ### LLM
 
 - Primary: `gemini/gemini-2.5-flash` via LiteLLM
-- Fallback chain: Gemini 2.5 Pro → Ollama llama3.1
 - Temperature 0.1 for factual tax answers
 - Tool definitions in OpenAI format (LiteLLM translates per-provider)
+
+### Auth
+
+- HTTP Basic Auth middleware on all routes (`BasicAuthMiddleware` in `app.py`)
+- Credentials from `AUTH_USERNAME` / `AUTH_PASSWORD` env vars
+- Timing-safe comparison via `secrets.compare_digest`
+
+### Frontend
+
+- Static HTML/CSS/JS served from `static/` directory
+- `GET /` serves `static/index.html`, static assets mounted at `/static`
 
 ## Code Conventions
 
@@ -70,12 +82,11 @@ Offline **Ingestion Pipeline**: Crawler (httpx) → Parser (BS4/PyMuPDF) → Tax
 - Use proper logging (no print statements)
 - Use `.env` file for env vars (not inline in docker compose)
 - Pydantic models for all data structures
-- YAML configs in `config/` for LLM, embeddings, and ingestion sources
-- FastAPI dependency injection via `dependencies.py`
+- YAML configs in `config/` — `embeddings.yaml`, `sources.yaml`, `sources_taxtechnical.yaml`; Pydantic Settings in `config/settings.py`
 
 ## Environment
 
-Copy `.env.example` to `.env` and set: `DB_PASSWORD`, `GEMINI_API_KEY`, `LLM_DEFAULT_MODEL`, `DATABASE_URL`
+Copy `.env.example` to `.env` and set: `DB_PASSWORD`, `GEMINI_API_KEY`, `LLM_DEFAULT_MODEL`, `DATABASE_URL`, `AUTH_USERNAME`, `AUTH_PASSWORD`
 
 ## Design Reference
 

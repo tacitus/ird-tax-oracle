@@ -1,10 +1,11 @@
 # NZ Personal Income Tax — RAG System Design
 
-> **Last updated:** 2026-02-14
+> **Last updated:** 2026-02-17
 >
 > **Revision history:**
 > | Date | Change |
 > |------|--------|
+> | 2026-02-17 | Updated docs to match actual implementation: project structure, migrations, docker compose, LLM gateway, embedder, auth, frontend, config files, test files |
 > | 2026-02-14 | Added yoyo-migrations for schema management; switched vector index from IVFFlat to HNSW; moved docs to `docs/`; fixed stale references (Claude→Gemini fallback chain, Scrapy→httpx, feedback CHECK constraint); reorganised open questions |
 > | 2026-02-13 | Pivoted to Gemini (LLM + embeddings); adopted `google-genai` SDK for embeddings (LiteLLM `task_type` bug); single API key stack |
 > | 2026-02-13 | Initial design — architecture, RAG pipeline, database schema, project structure |
@@ -107,68 +108,45 @@ LiteLLM provides a unified OpenAI-compatible interface across 100+ providers. Cr
 
 ### Configuration
 
-```yaml
-# config/llm.yaml
-llm:
-  default_model: "gemini/gemini-2.5-flash"
-  fallback_models:
-    - "gemini/gemini-2.5-pro"    # Higher-capability Gemini fallback
-    - "ollama/llama3.1"          # Local fallback (no API dependency)
-  
-  temperature: 0.1          # Low temp for factual tax answers
-  max_tokens: 4096
-  
-  # Provider-specific API keys are read from environment variables:
-  #   GEMINI_API_KEY (Google AI Studio)
-  #   OPENAI_API_KEY, ANTHROPIC_API_KEY, etc. (if adding other fallbacks)
-  
-  # For local models (Ollama):
-  ollama_base_url: "http://ollama:11434"
-```
+The default model is set via `LLM_DEFAULT_MODEL` env var (default: `gemini/gemini-2.5-flash`). No YAML config file — model selection is a single env var read by `config/settings.py`.
 
 ### LLM Gateway Interface
 
 ```python
 # src/llm/gateway.py
-from dataclasses import dataclass
-from typing import Optional
-import litellm
-
-@dataclass
-class LLMConfig:
-    default_model: str
-    fallback_models: list[str]
-    temperature: float = 0.1
-    max_tokens: int = 4096
+class CompletionResult(BaseModel):
+    """Result from an LLM completion, carrying both content and tool calls."""
+    content: str | None = None
+    tool_calls: list[Any] | None = None
+    raw_message: Any = None
+    model: str = ""
 
 class LLMGateway:
-    """Thin wrapper around LiteLLM that adds our system prompt and tool definitions."""
-    
-    def __init__(self, config: LLMConfig, system_prompt: str):
-        self.config = config
-        self.system_prompt = system_prompt
-        litellm.set_verbose = False
-    
+    """Async LLM completion via LiteLLM."""
+
+    def __init__(self, model: str | None = None) -> None:
+        self.model = model or settings.llm_default_model
+
     async def complete(
         self,
-        messages: list[dict],
-        tools: Optional[list[dict]] = None,
-        model_override: Optional[str] = None,
-    ) -> litellm.ModelResponse:
-        """Send a completion request with automatic fallback."""
-        
-        full_messages = [
-            {"role": "system", "content": self.system_prompt},
-            *messages,
-        ]
-        
-        return await litellm.acompletion(
-            model=model_override or self.config.default_model,
-            messages=full_messages,
-            tools=tools,
-            temperature=self.config.temperature,
-            max_tokens=self.config.max_tokens,
-            fallbacks=self.config.fallback_models,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> CompletionResult:
+        """Send messages to the LLM and return the response."""
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.1,
+        }
+        if tools:
+            kwargs["tools"] = tools
+        response = await litellm.acompletion(**kwargs)
+        message = response.choices[0].message
+        return CompletionResult(
+            content=message.content,
+            tool_calls=message.tool_calls,
+            raw_message=message,
+            model=response.model or self.model,
         )
 ```
 
@@ -196,7 +174,7 @@ Since LiteLLM translates OpenAI-format tools to each provider's native format, w
             ┌────────▼────────┐
             │  Content Parser │
             │  HTML: BS4      │
-            │  PDF: pymupdf   │
+            │  PDF: pymupdf4llm│
             └────────┬────────┘
                      │
             ┌────────▼────────┐
@@ -294,31 +272,32 @@ embeddings:
 ```
 
 ```python
-# src/rag/embedder.py — Gemini embedding using google-genai SDK
+# src/rag/embedder.py — Gemini embedding using google-genai SDK (async)
 from google import genai
 from google.genai import types
 
 class GeminiEmbedder:
-    def __init__(self, model: str = "gemini-embedding-001", dimensions: int = 768):
+    def __init__(self, model: str | None = None, dimensions: int | None = None) -> None:
+        config = load_yaml_config("embeddings.yaml")["embeddings"]
+        self.model = model or config["model"]
+        self.dimensions = dimensions or config["dimensions"]
         self.client = genai.Client()  # reads GEMINI_API_KEY from env
-        self.model = model
-        self.dimensions = dimensions
-    
-    async def embed_document(self, text: str) -> list[float]:
-        """Embed a document chunk for storage."""
-        result = self.client.models.embed_content(
+
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Embed a batch of document chunks for storage."""
+        result = await self.client.aio.models.embed_content(
             model=self.model,
-            contents=text,
+            contents=texts,
             config=types.EmbedContentConfig(
                 task_type="RETRIEVAL_DOCUMENT",
                 output_dimensionality=self.dimensions,
             ),
         )
-        return result.embeddings[0].values
-    
+        return [e.values for e in result.embeddings]
+
     async def embed_query(self, text: str) -> list[float]:
-        """Embed a search query — uses different task_type for asymmetric retrieval."""
-        result = self.client.models.embed_content(
+        """Embed a search query — uses RETRIEVAL_QUERY task type for asymmetric retrieval."""
+        result = await self.client.aio.models.embed_content(
             model=self.model,
             contents=text,
             config=types.EmbedContentConfig(
@@ -376,11 +355,17 @@ A cross-encoder reranker (e.g., `BAAI/bge-reranker-v2-m3` or Cohere Rerank) appl
 
 **Managed by [yoyo-migrations](https://ollycope.com/software/yoyo/latest/)** — lightweight, Python-native migration tool. Each migration is a Python file in `migrations/` with explicit `step()` up/down pairs and `__depends__` for ordering. Migrations run automatically on container startup via `scripts/migrate.py`.
 
+Current migrations: `0001_extensions`, `0002_document_sources`, `0003_document_chunks`, `0004_taxtechnical_fields`. The `tax_years`, `tax_brackets`, and `query_log` tables shown below are planned for Phase 2.
+
 > **Why not raw SQL in `docker-entrypoint-initdb.d`?** That only runs on a fresh database. Yoyo tracks applied migrations in `_yoyo_migration` and applies only what's new, so schema changes are safe on existing data.
 
 > **Why HNSW, not IVFFlat?** IVFFlat requires training data (the `lists` parameter sizes clusters from existing rows). On an empty table it either fails or produces near-random results. HNSW works immediately with zero rows and has better recall at our corpus size (~5K chunks). The tradeoff is slightly higher memory, which is irrelevant at this scale.
 
 ```sql
+-- Migrations (actual: 0001_extensions, 0002_document_sources,
+-- 0003_document_chunks, 0004_taxtechnical_fields)
+-- tax_years, tax_brackets, query_log tables are planned for Phase 2.
+--
 -- Migration 0001: Extensions
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;  -- for fuzzy text matching
@@ -392,9 +377,13 @@ CREATE TABLE document_sources (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     url             TEXT UNIQUE NOT NULL,
     source_type     TEXT NOT NULL CHECK (source_type IN (
-                        'ird_guidance', 'legislation', 'tib', 
-                        'guide_pdf', 'interpretation_statement'
+                        'ird_guidance', 'legislation', 'tib',
+                        'guide_pdf', 'interpretation_statement',
+                        'qwba', 'fact_sheet', 'operational_statement'
                     )),
+    identifier      TEXT,                  -- e.g. "IS 24/07" (added in 0004)
+    issue_date      DATE,                  -- publication date (added in 0004)
+    superseded_by   TEXT,                  -- identifier of replacement (added in 0004)
     title           TEXT,
     last_crawled_at TIMESTAMPTZ,
     content_hash    TEXT,              -- SHA256 of raw content, for change detection
@@ -489,25 +478,33 @@ CREATE TABLE query_log (
 nz-tax-rag/
 ├── docker-compose.yml
 ├── Dockerfile
-├── pyproject.toml                  # uv / poetry
+├── pyproject.toml                  # uv
 ├── yoyo.ini                        # yoyo-migrations config (sources dir only, no creds)
-├── README.md
+├── .env.example                    # Template for environment variables
+│
+├── static/                         # Frontend (served by FastAPI)
+│   ├── index.html
+│   ├── favicon.svg
+│   ├── css/
+│   └── js/
 │
 ├── docs/                           # Design documentation
-│   ├── design.md                   # System design document
-│   └── architecture.mermaid        # Architecture diagram (Mermaid)
+│   ├── design.md                   # System design document (this file)
+│   ├── architecture.mermaid        # Architecture diagram (Mermaid)
+│   ├── prompt_design.md            # LLM prompt engineering notes
+│   ├── data-sources.md             # Source documentation
+│   └── taxtechnical.ird.nz.md     # Tax Technical site analysis
 │
 ├── migrations/                     # yoyo-migrations (Python step files)
 │   ├── 0001_extensions.py
 │   ├── 0002_document_sources.py
 │   ├── 0003_document_chunks.py
-│   ├── 0004_tax_rules.py
-│   └── 0005_query_log.py
+│   └── 0004_taxtechnical_fields.py # Source type expansion + metadata columns
 │
 ├── config/
-│   ├── llm.yaml                    # LLM provider config
 │   ├── embeddings.yaml             # Embedding model config
-│   ├── sources.yaml                # Document sources to crawl
+│   ├── sources.yaml                # IRD guidance sources to crawl
+│   ├── sources_taxtechnical.yaml   # Tax Technical sources to crawl
 │   └── settings.py                 # Pydantic Settings (env vars)
 │
 ├── src/
@@ -515,66 +512,62 @@ nz-tax-rag/
 │   │
 │   ├── api/                        # FastAPI application
 │   │   ├── __init__.py
-│   │   ├── app.py                  # FastAPI app factory
-│   │   ├── routes/
-│   │   │   ├── ask.py              # POST /ask — main query endpoint
-│   │   │   ├── health.py           # GET /health
-│   │   │   └── admin.py            # POST /admin/ingest, GET /admin/stats
-│   │   └── dependencies.py         # DI for db, llm, retriever
+│   │   ├── app.py                  # App factory, lifespan, BasicAuth middleware
+│   │   └── routes.py               # Routes: /, /ask, /health, /favicon.ico
 │   │
 │   ├── llm/                        # LLM abstraction
 │   │   ├── __init__.py
-│   │   ├── gateway.py              # LiteLLM wrapper
+│   │   ├── gateway.py              # LiteLLM wrapper (CompletionResult)
 │   │   ├── prompts.py              # System prompts
-│   │   └── tools.py                # Tool definitions (OpenAI format)
+│   │   ├── tools.py                # Tool definitions (OpenAI format)
+│   │   └── postprocess.py          # LLM response postprocessor
 │   │
 │   ├── rag/                        # RAG pipeline
 │   │   ├── __init__.py
-│   │   ├── retriever.py            # Hybrid search (semantic + keyword)
-│   │   ├── embedder.py             # Embedding service abstraction
-│   │   └── reranker.py             # Optional cross-encoder reranker
+│   │   ├── retriever.py            # Hybrid search (semantic + keyword + RRF)
+│   │   └── embedder.py             # Async Gemini embedding (batch support)
 │   │
 │   ├── ingestion/                  # Document ingestion pipeline
 │   │   ├── __init__.py
 │   │   ├── crawler.py              # HTTP crawler (httpx + rate limiting)
 │   │   ├── parsers/
-│   │   │   ├── html_parser.py      # BeautifulSoup-based
-│   │   │   └── pdf_parser.py       # pymupdf-based
+│   │   │   ├── __init__.py
+│   │   │   ├── html_parser.py      # BeautifulSoup — IRD guidance pages
+│   │   │   ├── pdf_parser.py       # pymupdf4llm — PDF guides
+│   │   │   └── taxtechnical_parser.py  # Tax Technical site parser
 │   │   ├── chunker.py              # Tax-aware chunking
 │   │   └── pipeline.py             # Orchestrates crawl → parse → chunk → embed → store
 │   │
-│   ├── orchestrator/               # Query orchestration
-│   │   ├── __init__.py
-│   │   └── engine.py               # Receives query, calls LLM with tools, returns answer
+│   ├── orchestrator.py             # Query→retrieve→LLM→answer flow (flat module)
 │   │
-│   ├── db/                         # Database layer
-│   │   ├── __init__.py
-│   │   ├── session.py              # asyncpg connection pool
-│   │   └── models.py               # Pydantic models for DB rows
-│   │
-│   └── calculators/                # Deterministic tax calculations (phase 2)
+│   └── db/                         # Database layer
 │       ├── __init__.py
-│       ├── income_tax.py
-│       ├── paye.py
-│       ├── acc.py
-│       └── student_loan.py
+│       ├── session.py              # asyncpg connection pool
+│       └── models.py               # Pydantic models for DB rows
 │
 ├── tests/
 │   ├── conftest.py
-│   ├── test_retriever.py
+│   ├── fixtures/                   # Test fixture data
+│   ├── test_api.py
 │   ├── test_chunker.py
-│   ├── test_ingestion.py
-│   ├── test_orchestrator.py
-│   └── eval/                       # Evaluation suite
-│       ├── test_scenarios.yaml     # Known Q&A pairs
-│       └── run_eval.py
+│   ├── test_parser.py
+│   ├── test_pdf_parser.py
+│   ├── test_postprocess.py
+│   ├── test_prompts.py
+│   ├── test_retriever.py
+│   ├── test_taxtechnical_parser.py
+│   └── eval/                       # Evaluation suite (planned)
 │
 └── scripts/
     ├── migrate.py                  # CLI: apply/rollback/list migrations
-    ├── ingest.py                   # CLI: run ingestion pipeline
-    ├── seed_tax_rules.py           # CLI: populate tax brackets etc.
-    └── eval.py                     # CLI: run evaluation suite
+    └── ingest.py                   # CLI: run ingestion pipeline
 ```
+
+**Planned (Phase 2):**
+- `src/calculators/` — Deterministic tax calculations (income_tax, paye, acc, student_loan), tool-callable by LLM
+- `src/rag/reranker.py` — Optional cross-encoder reranker
+- `scripts/seed_tax_rules.py` — Populate tax brackets
+- `scripts/eval.py` — Run evaluation suite
 
 ---
 
@@ -590,7 +583,7 @@ services:
       POSTGRES_USER: taxapp
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "5432:5432"
+      - "5434:5432"              # Host port 5434 (5432 often taken by OrbStack)
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -601,6 +594,7 @@ services:
   migrate:
     build: .
     command: python scripts/migrate.py
+    env_file: .env
     environment:
       DATABASE_URL: postgresql://taxapp:${DB_PASSWORD}@db:5432/nz_tax
     depends_on:
@@ -611,17 +605,28 @@ services:
     build: .
     command: uvicorn src.api.app:create_app --host 0.0.0.0 --port 8000 --factory
     ports:
-      - "8000:8000"
+      - "8008:8000"              # Host port 8008
+    env_file: .env               # All env vars (GEMINI_API_KEY, AUTH_*, etc.)
     environment:
       DATABASE_URL: postgresql+asyncpg://taxapp:${DB_PASSWORD}@db:5432/nz_tax
-      GEMINI_API_KEY: ${GEMINI_API_KEY}        # Used for both LLM and embeddings
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}  # Optional: fallback only
-      LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL:-gemini/gemini-2.5-flash}
     depends_on:
       migrate:
         condition: service_completed_successfully
     volumes:
       - ./config:/app/config
+      - ./static:/app/static     # Frontend assets
+
+  dev:                           # Dev/test runner
+    build: .
+    command: bash
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://taxapp:${DB_PASSWORD}@db:5432/nz_tax
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
 
   # Optional: local LLM via Ollama
   ollama:
@@ -684,8 +689,8 @@ volumes:
 2. **Embedding model** — Gemini `gemini-embedding-001` at 768 dims. Same API key as LLM. Re-embedding ~5K chunks takes minutes if switching to local — acceptable risk.
 3. **Schema migrations** — yoyo-migrations. Python-native, lightweight, explicit up/down steps.
 4. **Vector index type** — HNSW (not IVFFlat). Works on empty tables, better recall at our scale.
+5. **Authentication** — HTTP Basic Auth middleware on all routes. Credentials via `AUTH_USERNAME` / `AUTH_PASSWORD` env vars. Timing-safe comparison with `secrets.compare_digest`.
 
 ### Still Open
-5. **How often to re-crawl?** — IRD guidance changes infrequently. Monthly seems sufficient, with a manual trigger for budget announcements.
-6. **Authentication** — Do we need auth on the API from day one, or is this internal-only initially?
+6. **How often to re-crawl?** — IRD guidance changes infrequently. Monthly seems sufficient, with a manual trigger for budget announcements.
 7. **Evaluation ground truth** — Who validates the test scenarios? Ideally someone with NZ tax knowledge reviews them.
