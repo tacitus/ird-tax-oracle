@@ -36,6 +36,7 @@ services:
       migrate:
         condition: service_completed_successfully
     volumes:
+      - ./src:/app/src
       - ./config:/app/config
       - ./static:/app/static
 

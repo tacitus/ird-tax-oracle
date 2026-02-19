@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     embedder = GeminiEmbedder()
     retriever = HybridRetriever(pool, embedder)
     llm = LLMGateway()
-    app.state.orchestrator = Orchestrator(retriever, llm)
+    app.state.orchestrator = Orchestrator(retriever, llm, pool=pool)
 
     yield
 
@@ -49,8 +49,8 @@ UNAUTHORIZED = Response(
 )
 
 
-AUTH_USERNAME = os.environ.get("AUTH_USERNAME").encode()
-AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD").encode()
+AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "").encode()
+AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "").encode()
 
 
 class BasicAuthMiddleware(BaseHTTPMiddleware):

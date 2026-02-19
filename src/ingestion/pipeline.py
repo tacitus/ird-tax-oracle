@@ -6,7 +6,7 @@ Supports upsert semantics with content hash change detection.
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import asyncpg
 
@@ -95,7 +95,7 @@ class IngestionPipeline:
         )
 
         # Insert new chunks
-        for chunk, embedding in zip(chunks, embeddings):
+        for chunk, embedding in zip(chunks, embeddings, strict=True):
             await conn.execute(
                 """
                 INSERT INTO document_chunks
@@ -141,7 +141,7 @@ class IngestionPipeline:
             source_type,
             title,
             content_hash,
-            datetime.now(timezone.utc),
+            datetime.now(UTC),
             identifier,
             issue_date,
         )
@@ -233,8 +233,7 @@ class IngestionPipeline:
         embeddings = await self._embed_chunks(chunks)
 
         # Store atomically
-        async with pool.acquire() as conn:
-            async with conn.transaction():
+        async with pool.acquire() as conn, conn.transaction():
                 source_id = await self._upsert_source(
                     conn, url, source_type, page_title, crawl_result.content_hash,
                     identifier=identifier, issue_date=issue_date,

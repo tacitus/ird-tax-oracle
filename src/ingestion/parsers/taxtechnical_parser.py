@@ -11,9 +11,7 @@ import logging
 import re
 from urllib.parse import urljoin
 
-from bs4 import BeautifulSoup
-from bs4 import NavigableString  # type: ignore[attr-defined]
-from bs4 import Tag
+from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore[attr-defined]
 
 from src.db.models import ParsedDocument, ParsedSection
 from src.ingestion.parsers.html_parser import _get_text_content

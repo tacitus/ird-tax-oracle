@@ -27,6 +27,13 @@ _QA_PATTERNS = [
 ]
 
 
+def _strip_markdown_formatting(text: str) -> str:
+    """Strip markdown bold/italic markers from text."""
+    text = re.sub(r'\*{1,2}(.+?)\*{1,2}', r'\1', text)
+    text = re.sub(r'_{1,2}(.+?)_{1,2}', r'\1', text)
+    return text.strip()
+
+
 def _extract_title(doc: Any, url: str) -> str:
     """Extract document title from metadata, first large text, or URL fallback."""
     # Try PDF metadata
@@ -102,7 +109,7 @@ def _markdown_to_sections(md_text: str) -> list[ParsedSection]:
 
     for i, match in enumerate(matches):
         level = len(match.group(1))
-        heading = match.group(2).strip()
+        heading = _strip_markdown_formatting(match.group(2).strip())
 
         # Update parent tracking
         parent_headings[level] = heading

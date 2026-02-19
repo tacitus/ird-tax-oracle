@@ -3,7 +3,6 @@
 from src.db.models import SourceReference
 from src.llm.postprocess import linkify_bare_urls, strip_trailing_sources
 
-
 # --- strip_trailing_sources ---
 
 

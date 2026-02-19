@@ -21,12 +21,20 @@ class HybridRetriever:
         self._pool = pool
         self._embedder = embedder
 
-    async def search(self, query: str, top_k: int = 5) -> list[RetrievalResult]:
+    async def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        source_type: str | None = None,
+        tax_year: str | None = None,
+    ) -> list[RetrievalResult]:
         """Run hybrid search and return top-k results fused with RRF.
 
         Args:
             query: User's natural-language question.
             top_k: Number of results to return.
+            source_type: Optional filter by document source type.
+            tax_year: Optional filter by tax year.
 
         Returns:
             Ranked list of RetrievalResult.
@@ -36,8 +44,12 @@ class HybridRetriever:
         query_embedding = await self._embedder.embed_query(query)
 
         async with self._pool.acquire() as conn:
-            semantic_rows = await self._semantic_search(conn, query_embedding, fetch_k)
-            keyword_rows = await self._keyword_search(conn, query, fetch_k)
+            semantic_rows = await self._semantic_search(
+                conn, query_embedding, fetch_k, source_type, tax_year
+            )
+            keyword_rows = await self._keyword_search(
+                conn, query, fetch_k, source_type, tax_year
+            )
 
         return rrf_fuse(semantic_rows, keyword_rows, top_k)
 
@@ -46,22 +58,41 @@ class HybridRetriever:
         conn: asyncpg.Connection,
         embedding: list[float],
         limit: int,
+        source_type: str | None = None,
+        tax_year: str | None = None,
     ) -> list[RetrievalResult]:
         """Cosine-distance search via pgvector HNSW index."""
-        rows = await conn.fetch(
-            """
+        # $1=embedding, $2=limit, $3+=optional filters
+        conditions = ["s.is_active = TRUE", "s.superseded_by IS NULL"]
+        filter_params: list[object] = []
+        idx = 3
+
+        if source_type:
+            conditions.append(f"s.source_type = ${idx}")
+            filter_params.append(source_type)
+            idx += 1
+
+        if tax_year:
+            conditions.append(f"c.tax_year = ${idx}")
+            filter_params.append(tax_year)
+            idx += 1
+
+        where_clause = " AND ".join(conditions)
+
+        sql = f"""
             SELECT c.content, c.section_title, c.tax_year,
                    s.url AS source_url, s.title AS source_title,
                    s.source_type,
                    c.embedding <=> $1 AS distance
             FROM document_chunks c
             JOIN document_sources s ON s.id = c.source_id
-            WHERE s.is_active = TRUE AND s.superseded_by IS NULL
+            WHERE {where_clause}
             ORDER BY c.embedding <=> $1
             LIMIT $2
-            """,
-            np.array(embedding, dtype=np.float32),
-            limit,
+        """
+
+        rows = await conn.fetch(
+            sql, np.array(embedding, dtype=np.float32), limit, *filter_params
         )
         return [
             RetrievalResult(
@@ -71,7 +102,7 @@ class HybridRetriever:
                 source_title=r["source_title"],
                 source_type=r["source_type"],
                 tax_year=r["tax_year"],
-                score=1.0 - float(r["distance"]),  # convert distance to similarity
+                score=1.0 - float(r["distance"]),
             )
             for r in rows
         ]
@@ -81,24 +112,44 @@ class HybridRetriever:
         conn: asyncpg.Connection,
         query: str,
         limit: int,
+        source_type: str | None = None,
+        tax_year: str | None = None,
     ) -> list[RetrievalResult]:
         """Full-text search using tsvector index."""
-        rows = await conn.fetch(
-            """
+        # $1=query, $2=limit, $3+=optional filters
+        conditions = [
+            "c.search_vector @@ plainto_tsquery('english', $1)",
+            "s.is_active = TRUE",
+            "s.superseded_by IS NULL",
+        ]
+        filter_params: list[object] = []
+        idx = 3
+
+        if source_type:
+            conditions.append(f"s.source_type = ${idx}")
+            filter_params.append(source_type)
+            idx += 1
+
+        if tax_year:
+            conditions.append(f"c.tax_year = ${idx}")
+            filter_params.append(tax_year)
+            idx += 1
+
+        where_clause = " AND ".join(conditions)
+
+        sql = f"""
             SELECT c.content, c.section_title, c.tax_year,
                    s.url AS source_url, s.title AS source_title,
                    s.source_type,
                    ts_rank_cd(c.search_vector, plainto_tsquery('english', $1)) AS rank
             FROM document_chunks c
             JOIN document_sources s ON s.id = c.source_id
-            WHERE c.search_vector @@ plainto_tsquery('english', $1)
-              AND s.is_active = TRUE AND s.superseded_by IS NULL
+            WHERE {where_clause}
             ORDER BY rank DESC
             LIMIT $2
-            """,
-            query,
-            limit,
-        )
+        """
+
+        rows = await conn.fetch(sql, query, limit, *filter_params)
         return [
             RetrievalResult(
                 content=r["content"],
