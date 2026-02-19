@@ -64,8 +64,111 @@ form.addEventListener("submit", async (e) => {
   await submitQuestion(question);
 });
 
+/* Main submit — try streaming, fall back to non-streaming */
 async function submitQuestion(question) {
   setQueryParam(question);
+  showState("loading");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120_000);
+
+  try {
+    /* Try streaming endpoint first */
+    const resp = await fetch("/ask/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+      signal: controller.signal,
+    });
+
+    /* If streaming endpoint doesn't exist, fall back */
+    if (resp.status === 404) {
+      clearTimeout(timeout);
+      await submitQuestionFallback(question);
+      return;
+    }
+
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => null);
+      throw new Error(body?.detail || `Server error (${resp.status})`);
+    }
+
+    /* Switch to answer state and start streaming */
+    $(".answer-content").innerHTML = "";
+    $(".tools-used").innerHTML = "";
+    $(".tools-used").hidden = true;
+    $(".sources").hidden = true;
+    $(".model-attr").textContent = "";
+    showState("answer");
+
+    let fullText = "";
+    let sources = [];
+    let model = "";
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const jsonStr = line.slice(6);
+        if (!jsonStr) continue;
+
+        let event;
+        try {
+          event = JSON.parse(jsonStr);
+        } catch {
+          continue;
+        }
+
+        if (event.type === "status") {
+          $(".loading-text").textContent = event.message;
+        } else if (event.type === "tool_use") {
+          addToolPill(event.label || event.tool, event.tool);
+        } else if (event.type === "chunk") {
+          fullText += event.delta;
+          const html = DOMPurify.sanitize(marked.parse(fullText), {
+            ADD_ATTR: ["target"],
+          });
+          $(".answer-content").innerHTML = html;
+        } else if (event.type === "sources") {
+          sources = event.sources || [];
+        } else if (event.type === "done") {
+          model = event.model || "";
+        } else if (event.type === "error") {
+          throw new Error(event.message || "Stream error");
+        }
+      }
+    }
+
+    clearTimeout(timeout);
+
+    /* Render sources and model */
+    renderSources(sources);
+    if (model) $(".model-attr").textContent = `Answered by ${model}`;
+    sections.answer.focus();
+  } catch (err) {
+    clearTimeout(timeout);
+    const msg =
+      err.name === "AbortError"
+        ? "Request timed out. The server may be busy — please try again."
+        : err.message || "Something went wrong.";
+    $(".error-section p").textContent = msg;
+    showState("error");
+    sections.error.focus();
+  }
+}
+
+/* Non-streaming fallback */
+async function submitQuestionFallback(question) {
   showState("loading");
 
   const controller = new AbortController();
@@ -109,18 +212,43 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   }
 });
 
-function renderAnswer(data) {
-  /* Markdown → sanitised HTML */
-  const html = DOMPurify.sanitize(marked.parse(data.answer), {
-    ADD_ATTR: ["target"],
-  });
-  $(".answer-content").innerHTML = html;
+const TOOL_ICONS = {
+  calculate_income_tax: "\u{1F9EE}",
+  calculate_paye: "\u{1F9EE}",
+  calculate_student_loan_repayment: "\u{1F9EE}",
+  calculate_acc_levy: "\u{1F9EE}",
+  search_tax_documents: "\u{1F50D}",
+};
 
-  /* Sources */
+function addToolPill(label, toolName) {
+  const container = $(".tools-used");
+  const pill = document.createElement("span");
+  pill.className = "tool-pill";
+  const icon = document.createElement("span");
+  icon.className = "tool-pill-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = TOOL_ICONS[toolName] || "\u{1F9EE}";
+  pill.appendChild(icon);
+  pill.appendChild(document.createTextNode(label));
+  container.appendChild(pill);
+  container.hidden = false;
+}
+
+function renderToolsUsed(toolsUsed) {
+  const container = $(".tools-used");
+  container.innerHTML = "";
+  if (toolsUsed && toolsUsed.length) {
+    toolsUsed.forEach((t) => addToolPill(t.label, t.name));
+  } else {
+    container.hidden = true;
+  }
+}
+
+function renderSources(sources) {
   const list = $(".sources-list");
   list.innerHTML = "";
-  if (data.sources && data.sources.length) {
-    data.sources.forEach((s) => {
+  if (sources && sources.length) {
+    sources.forEach((s) => {
       const li = document.createElement("li");
       const a = document.createElement("a");
       a.href = s.url;
@@ -134,9 +262,10 @@ function renderAnswer(data) {
       a.appendChild(srHint);
       li.appendChild(a);
       if (s.section_title) {
+        const clean = s.section_title.replace(/\*{1,2}|_{1,2}/g, "");
         const span = document.createElement("span");
         span.className = "source-section";
-        span.textContent = ` — ${s.section_title}`;
+        span.textContent = ` > ${clean}`;
         li.appendChild(span);
       }
       list.appendChild(li);
@@ -145,6 +274,20 @@ function renderAnswer(data) {
   } else {
     $(".sources").hidden = true;
   }
+}
+
+function renderAnswer(data) {
+  /* Tools used */
+  renderToolsUsed(data.tools_used);
+
+  /* Markdown → sanitised HTML */
+  const html = DOMPurify.sanitize(marked.parse(data.answer), {
+    ADD_ATTR: ["target"],
+  });
+  $(".answer-content").innerHTML = html;
+
+  /* Sources */
+  renderSources(data.sources);
 
   /* Model attribution */
   $(".model-attr").textContent = `Answered by ${data.model}`;
