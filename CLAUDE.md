@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 NZ Personal Income Tax RAG system — answers personal income tax questions for New Zealand residents using IRD official guidance and legislation. Uses hybrid retrieval (semantic + keyword search with RRF) over a PostgreSQL/pgvector corpus, with Gemini LLM via LiteLLM.
 
-**Status:** Iteration 1 complete — ingestion pipeline operational (crawler, HTML parser, taxtechnical parser, tax-aware chunker, Gemini embedder, pgvector storage). Two source collections: `sources.yaml` (IRD guidance) and `sources_taxtechnical.yaml` (taxtechnical.ird.govt.nz). Frontend and Basic Auth in place.
+**Status:** Iteration 2 complete — adds LLM tool calling, tax calculators, SSE streaming, query logging with feedback, and evaluation framework on top of the Iteration 1 RAG foundation.
 
 ## Commands
 
@@ -25,6 +25,8 @@ docker compose run --rm dev mypy src/                             # Type check (
 docker compose run --rm dev python scripts/migrate.py             # Apply migrations
 docker compose run --rm dev python scripts/ingest.py              # Run full ingestion
 docker compose run --rm dev python scripts/ingest.py --url "..."  # Ingest single URL
+docker compose run --rm dev python scripts/eval.py               # Run evaluation suite
+docker compose run --rm dev python scripts/seed_tax_rules.py     # Seed tax bracket data
 ```
 
 ## Architecture
@@ -35,12 +37,13 @@ Offline **Ingestion Pipeline**: Crawler (httpx) → Parser (BS4/pymupdf4llm) →
 
 ### Key modules in `src/`
 
-- `api/` — FastAPI app factory (`create_app()` in `app.py`), routes (`/`, `/ask`, `/health`, `/favicon.ico` in `routes.py`), Basic Auth middleware, DI via `app.state`
-- `llm/` — LiteLLM wrapper (`gateway.py`), system prompts (`prompts.py`), tool definitions (`tools.py`), LLM response postprocessor (`postprocess.py`)
-- `rag/` — Hybrid retriever (semantic + keyword + RRF in `retriever.py`), async embedding service (`embedder.py`)
+- `api/` — FastAPI app factory (`create_app()` in `app.py`), routes (`/`, `/ask`, `/ask/stream`, `/feedback`, `/health` in `routes.py`), Basic Auth middleware, DI via `app.state`
+- `llm/` — LiteLLM wrapper with streaming (`gateway.py`), system prompts (`prompts.py`), tool definitions (`tools.py`), LLM response postprocessor (`postprocess.py`)
+- `rag/` — Hybrid retriever with source_type/tax_year filtering (semantic + keyword + RRF in `retriever.py`), async embedding service (`embedder.py`)
 - `ingestion/` — HTTP crawler (`crawler.py`), parsers (`parsers/html_parser.py`, `parsers/pdf_parser.py`, `parsers/taxtechnical_parser.py`), tax-aware chunker (`chunker.py`), pipeline orchestrator (`pipeline.py`)
-- `orchestrator.py` — Query→retrieve→LLM→answer flow (flat module, not a package)
-- `db/` — asyncpg connection pool (`session.py`), Pydantic models (`models.py`)
+- `orchestrator.py` — Query→retrieve→tool loop→LLM→answer flow with SSE streaming (`ask_stream`)
+- `calculators/` — Deterministic NZ tax calculators: income tax, PAYE, student loan, ACC levy (`tax_data.py` has bracket data)
+- `db/` — asyncpg connection pool (`session.py`), Pydantic models (`models.py`), query logging with feedback (`query_log.py`)
 
 ### Database
 
@@ -49,7 +52,8 @@ Offline **Ingestion Pipeline**: Crawler (httpx) → Parser (BS4/pymupdf4llm) →
 - Core tables: `document_sources` (with `identifier`, `issue_date`, `superseded_by` metadata), `document_chunks` (with `vector(768)` + `tsvector`)
 - Source types: `ird_guidance`, `legislation`, `tib`, `guide_pdf`, `interpretation_statement`, `qwba`, `fact_sheet`, `operational_statement`
 - HNSW index on embeddings (not IVFFlat — works on empty tables)
-- Planned tables (Phase 2): `tax_years`, `tax_brackets`, `query_log`
+- `query_log` table with feedback columns (`positive`/`negative` + note) and `tool_calls` JSONB
+- `tax_years` and `tax_brackets` tables for future dynamic rate lookups
 
 ### Embeddings
 
@@ -63,6 +67,8 @@ Offline **Ingestion Pipeline**: Crawler (httpx) → Parser (BS4/pymupdf4llm) →
 - Primary: `gemini/gemini-2.5-flash` via LiteLLM
 - Temperature 0.1 for factual tax answers
 - Tool definitions in OpenAI format (LiteLLM translates per-provider)
+- Multi-round tool calling: calculators (income_tax, paye, student_loan, acc) + document search
+- Streaming via LiteLLM's async streaming API
 
 ### Auth
 
@@ -74,6 +80,8 @@ Offline **Ingestion Pipeline**: Crawler (httpx) → Parser (BS4/pymupdf4llm) →
 
 - Static HTML/CSS/JS served from `static/` directory
 - `GET /` serves `static/index.html`, static assets mounted at `/static`
+- SSE streaming with real-time answer rendering (marked + DOMPurify)
+- Tool-use indicator pills, thumbs up/down feedback, copy-link sharing
 
 ## Code Conventions
 

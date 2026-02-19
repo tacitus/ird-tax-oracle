@@ -1,10 +1,11 @@
 # NZ Personal Income Tax — RAG System Design
 
-> **Last updated:** 2026-02-17
+> **Last updated:** 2026-02-19
 >
 > **Revision history:**
 > | Date | Change |
 > |------|--------|
+> | 2026-02-19 | Phase 2 complete: tax calculators, tool calling, SSE streaming, query logging + feedback, eval framework. Updated build sequence and project structure |
 > | 2026-02-17 | Updated docs to match actual implementation: project structure, migrations, docker compose, LLM gateway, embedder, auth, frontend, config files, test files |
 > | 2026-02-14 | Added yoyo-migrations for schema management; switched vector index from IVFFlat to HNSW; moved docs to `docs/`; fixed stale references (Claude→Gemini fallback chain, Scrapy→httpx, feedback CHECK constraint); reorganised open questions |
 > | 2026-02-13 | Pivoted to Gemini (LLM + embeddings); adopted `google-genai` SDK for embeddings (LiteLLM `task_type` bug); single API key stack |
@@ -355,7 +356,7 @@ A cross-encoder reranker (e.g., `BAAI/bge-reranker-v2-m3` or Cohere Rerank) appl
 
 **Managed by [yoyo-migrations](https://ollycope.com/software/yoyo/latest/)** — lightweight, Python-native migration tool. Each migration is a Python file in `migrations/` with explicit `step()` up/down pairs and `__depends__` for ordering. Migrations run automatically on container startup via `scripts/migrate.py`.
 
-Current migrations: `0001_extensions`, `0002_document_sources`, `0003_document_chunks`, `0004_taxtechnical_fields`. The `tax_years`, `tax_brackets`, and `query_log` tables shown below are planned for Phase 2.
+Current migrations: `0001_extensions`, `0002_document_sources`, `0003_document_chunks`, `0004_taxtechnical_fields`, `0005_query_log`, `0006_tax_years_and_brackets`.
 
 > **Why not raw SQL in `docker-entrypoint-initdb.d`?** That only runs on a fresh database. Yoyo tracks applied migrations in `_yoyo_migration` and applies only what's new, so schema changes are safe on existing data.
 
@@ -364,7 +365,7 @@ Current migrations: `0001_extensions`, `0002_document_sources`, `0003_document_c
 ```sql
 -- Migrations (actual: 0001_extensions, 0002_document_sources,
 -- 0003_document_chunks, 0004_taxtechnical_fields)
--- tax_years, tax_brackets, query_log tables are planned for Phase 2.
+-- tax_years, tax_brackets, query_log tables added in Phase 2 (migrations 0005, 0006).
 --
 -- Migration 0001: Extensions
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -563,11 +564,15 @@ nz-tax-rag/
     └── ingest.py                   # CLI: run ingestion pipeline
 ```
 
-**Planned (Phase 2):**
+**Added in Phase 2:**
 - `src/calculators/` — Deterministic tax calculations (income_tax, paye, acc, student_loan), tool-callable by LLM
-- `src/rag/reranker.py` — Optional cross-encoder reranker
+- `src/db/query_log.py` — Query logging with feedback support
 - `scripts/seed_tax_rules.py` — Populate tax brackets
 - `scripts/eval.py` — Run evaluation suite
+- `tests/eval/` — YAML-driven retrieval quality tests
+
+**Planned (Phase 3):**
+- `src/rag/reranker.py` — Optional cross-encoder reranker
 
 ---
 
@@ -655,17 +660,21 @@ volumes:
 5. **API** — `/ask` endpoint
 6. **Evaluation** — 20+ test scenarios with known answers
 
-### Phase 2: Calculations + Depth
-7. **Tax calculators** — Pure Python, deterministic, tool-callable
-8. **Ingest Tier 2** — Legislation, TIBs, interpretation statements
-9. **Reranker** — Cross-encoder for improved precision
-10. **Tax year awareness** — Route queries to correct year's data
+### Phase 2: Calculations + Depth ✅
+7. ~~**Tax calculators** — Pure Python, deterministic, tool-callable~~ ✅
+8. ~~**LLM tool calling** — Multi-round tool execution loop in orchestrator~~ ✅
+9. ~~**SSE streaming** — Real-time answer streaming via Server-Sent Events~~ ✅
+10. ~~**Query logging** — Log queries, tool calls, latency; user feedback (thumbs up/down)~~ ✅
+11. ~~**Evaluation framework** — YAML-driven retrieval quality tests~~ ✅
+12. **Ingest Tier 2** — Legislation, TIBs, interpretation statements (partial — taxtechnical done)
+13. **Reranker** — Cross-encoder for improved precision (deferred to Phase 3)
 
 ### Phase 3: Production Hardening
-11. **Caching** — Cache frequent queries + embeddings
-12. **Monitoring** — Latency, cost, error rates
-13. **Citation quality** — Ensure every answer links to source
-14. **Feedback loop** — Use query_log feedback to identify gaps
+14. **Reranker** — Cross-encoder for improved precision
+15. **Caching** — Cache frequent queries + embeddings
+16. **Monitoring** — Latency, cost, error rates
+17. **Citation quality** — Ensure every answer links to source
+18. **Feedback loop** — Use query_log feedback to identify gaps
 
 ---
 
