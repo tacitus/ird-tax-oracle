@@ -177,6 +177,75 @@ sources:
     source_type: ird_guidance
     title: "Living overseas with a student loan"
 
+  # === 1E. Provisional Tax ===
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax"
+    source_type: ird_guidance
+    title: "Provisional tax"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/paying-tax-in-your-first-year-in-business"
+    source_type: ird_guidance
+    title: "Paying tax in your first year in business"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/choosing-to-be-a-provisional-tax-payer"
+    source_type: ird_guidance
+    title: "Choosing to be a provisional tax payer"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/paying-your-provisional-tax"
+    source_type: ird_guidance
+    title: "Paying your provisional tax"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/paying-your-provisional-tax/payment-dates-for-provisional-tax"
+    source_type: ird_guidance
+    title: "Payment dates for provisional tax"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/interest-on-provisional-tax"
+    source_type: ird_guidance
+    title: "Interest on provisional tax"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options"
+    source_type: ird_guidance
+    title: "Provisional tax options"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options/standard-option"
+    source_type: ird_guidance
+    title: "Standard option for provisional tax"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options/standard-option/work-out-provisional-tax-using-the-standard-option"
+    source_type: ird_guidance
+    title: "Work out provisional tax using the standard option"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options/estimation-option"
+    source_type: ird_guidance
+    title: "Estimation option for provisional tax"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options/estimation-option/work-out-provisional-tax-using-the-estimation-option"
+    source_type: ird_guidance
+    title: "Work out provisional tax using the estimation option"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options/accounting-income-method-aim"
+    source_type: ird_guidance
+    title: "Accounting income method (AIM)"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options/accounting-income-method-aim/work-out-provisional-tax-using-aim"
+    source_type: ird_guidance
+    title: "Work out provisional tax using AIM"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options/accounting-income-method-aim/find-an-aim-provider"
+    source_type: ird_guidance
+    title: "Find an AIM provider"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options/accounting-income-method-aim/how-aim-compares-to-the-other-provisional-tax-options"
+    source_type: ird_guidance
+    title: "How AIM compares to the other provisional tax options"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options/ratio-option"
+    source_type: ird_guidance
+    title: "Ratio option for provisional tax"
+
+  - url: "https://www.ird.govt.nz/income-tax/provisional-tax/provisional-tax-options/ratio-option/work-out-provisional-tax-using-the-ratio-option"
+    source_type: ird_guidance
+    title: "Work out provisional tax using the ratio option"
+
   # === Tier 0 — Structured/Calculator PDFs ===
   - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/digital-service-providers/software-providers/payroll-calculations-business-rules-specifications/payroll-calculations-and-business-rules-specification-2026-v1.pdf"
     source_type: guide_pdf
@@ -218,3 +287,12 @@ sources:
   - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir200---ir299/ir257/ir257-2023.pdf"
     source_type: guide_pdf
     title: "IR257 Overseas pensions guide"
+
+  # -- Provisional tax PDFs --
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir200---ir299/ir289/ir289-2025.pdf"
+    source_type: guide_pdf
+    title: "IR289 Provisional tax guide 2025"
+
+  - url: "https://www.ird.govt.nz/-/media/project/ir/home/documents/forms-and-guides/ir200---ir299/ir235/ir235-2020.pdf"
+    source_type: guide_pdf
+    title: "IR235 GST and provisional tax summary 2020"

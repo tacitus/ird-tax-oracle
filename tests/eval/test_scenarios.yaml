@@ -1,0 +1,203 @@
+# Evaluation scenarios for NZ Tax RAG
+# Each scenario has a question, expected source types/URLs in top-k retrieval,
+# and optional answer keywords that should appear in a good response.
+
+scenarios:
+
+  # --- Tax brackets ---
+  - id: tax_brackets_current
+    question: "What are the current personal income tax brackets in New Zealand?"
+    expected_source_types: ["ird_guidance"]
+    expected_url_fragments: ["income-tax/income-tax-for-individuals/tax-codes-and-tax-rates"]
+    answer_keywords: ["10.5%", "17.5%", "30%", "33%", "39%"]
+    category: tax_brackets
+
+  - id: tax_brackets_prior_year
+    question: "What were the tax rates for the 2023-24 tax year?"
+    expected_source_types: ["ird_guidance", "guide_pdf"]
+    answer_keywords: ["tax rate", "income"]
+    category: tax_brackets
+
+  - id: tax_brackets_threshold
+    question: "At what income level does the 39% tax rate kick in?"
+    expected_source_types: ["ird_guidance", "guide_pdf"]
+    answer_keywords: ["180,000"]
+    category: tax_brackets
+
+  # --- KiwiSaver ---
+  - id: kiwisaver_contributions
+    question: "How do KiwiSaver contributions affect my take-home pay?"
+    expected_source_types: ["ird_guidance"]
+    expected_url_fragments: ["kiwisaver"]
+    answer_keywords: ["employer", "contribution"]
+    category: kiwisaver
+
+  - id: kiwisaver_rates
+    question: "What KiwiSaver contribution rates can I choose?"
+    expected_source_types: ["ird_guidance"]
+    expected_url_fragments: ["kiwisaver"]
+    answer_keywords: ["3%", "4%", "6%", "8%", "10%"]
+    category: kiwisaver
+
+  - id: kiwisaver_employer
+    question: "How much does my employer contribute to KiwiSaver?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["3%", "employer"]
+    category: kiwisaver
+
+  # --- Student loans ---
+  - id: student_loan_repayment
+    question: "How do student loan repayments work for salary and wage earners?"
+    expected_source_types: ["ird_guidance"]
+    expected_url_fragments: ["student-loan"]
+    answer_keywords: ["repayment", "threshold"]
+    category: student_loans
+
+  - id: student_loan_threshold
+    question: "What is the student loan repayment threshold?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["threshold"]
+    category: student_loans
+
+  - id: student_loan_rate
+    question: "What percentage of my income goes to student loan repayments?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["12%"]
+    category: student_loans
+
+  # --- IETC ---
+  - id: ietc_eligibility
+    question: "Am I eligible for the independent earner tax credit (IETC)?"
+    expected_source_types: ["ird_guidance"]
+    expected_url_fragments: ["independent-earner-tax-credit"]
+    answer_keywords: ["independent earner", "IETC"]
+    category: ietc
+
+  - id: ietc_amount
+    question: "How much is the independent earner tax credit worth?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["IETC"]
+    category: ietc
+
+  # --- Tax codes ---
+  - id: tax_code_two_jobs
+    question: "What tax code should I use if I have two jobs?"
+    expected_source_types: ["ird_guidance"]
+    expected_url_fragments: ["tax-codes"]
+    answer_keywords: ["secondary", "tax code"]
+    category: tax_codes
+
+  - id: tax_code_student_loan
+    question: "What tax code do I use if I have a student loan?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["SL", "student loan"]
+    category: tax_codes
+
+  - id: tax_code_selection
+    question: "How do I choose the right tax code?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["tax code"]
+    category: tax_codes
+
+  # --- Donation tax credits ---
+  - id: donation_credits
+    question: "How do donation tax credits work in New Zealand?"
+    expected_source_types: ["ird_guidance", "guide_pdf"]
+    answer_keywords: ["donation", "tax credit", "33"]
+    category: donations
+
+  - id: donation_claim
+    question: "How do I claim a tax credit for donations?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["receipt", "claim"]
+    category: donations
+
+  # --- RWT ---
+  - id: rwt_rates
+    question: "What are the current resident withholding tax (RWT) rates?"
+    expected_source_types: ["ird_guidance"]
+    expected_url_fragments: ["withholding-tax"]
+    answer_keywords: ["RWT", "withholding"]
+    category: rwt
+
+  - id: rwt_interest
+    question: "How does RWT apply to interest income?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["interest", "withholding"]
+    category: rwt
+
+  # --- PIE / PIR ---
+  - id: pie_pir_rates
+    question: "What PIR rate should I use for my PIE investments?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["PIR", "PIE"]
+    category: pie
+
+  - id: pie_explained
+    question: "What is a portfolio investment entity (PIE)?"
+    expected_source_types: ["ird_guidance", "guide_pdf"]
+    answer_keywords: ["PIE", "portfolio"]
+    category: pie
+
+  # --- Bright-line test ---
+  - id: bright_line
+    question: "How does the bright-line test work for property?"
+    expected_source_types: ["ird_guidance", "guide_pdf", "interpretation_statement"]
+    expected_url_fragments: ["is-23-02"]
+    answer_keywords: ["bright-line", "property"]
+    category: bright_line
+
+  - id: bright_line_period
+    question: "What is the bright-line period for residential property?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["bright-line", "year"]
+    category: bright_line
+
+  # --- Out of scope ---
+  - id: out_of_scope_gst
+    question: "How do I register for GST?"
+    expected_source_types: []
+    answer_keywords: ["outside", "scope"]
+    expect_out_of_scope: true
+    category: out_of_scope
+
+  - id: out_of_scope_company_tax
+    question: "What is the company tax rate in New Zealand?"
+    expected_source_types: []
+    answer_keywords: ["outside", "scope"]
+    expect_out_of_scope: true
+    category: out_of_scope
+
+  - id: out_of_scope_trust
+    question: "How are family trusts taxed?"
+    expected_source_types: []
+    answer_keywords: ["outside", "scope"]
+    expect_out_of_scope: true
+    category: out_of_scope
+
+  # --- ACC ---
+  - id: acc_levy
+    question: "How does the ACC earner's levy work?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["ACC", "levy"]
+    category: acc
+
+  # --- Working for Families ---
+  - id: wff_eligibility
+    question: "Am I eligible for Working for Families tax credits?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["Working for Families"]
+    category: wff
+
+  # --- End of year ---
+  - id: tax_return_filing
+    question: "Do I need to file an individual tax return (IR3)?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["IR3", "return"]
+    category: filing
+
+  - id: tax_refund
+    question: "How do I get a tax refund?"
+    expected_source_types: ["ird_guidance"]
+    answer_keywords: ["refund"]
+    category: filing

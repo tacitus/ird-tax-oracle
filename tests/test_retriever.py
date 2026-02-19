@@ -1,6 +1,6 @@
 """Tests for RRF fusion logic and HybridRetriever.search()."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
 import pytest
 
@@ -133,3 +133,85 @@ async def test_search_empty_results(
     results = await retriever.search("obscure query")
 
     assert results == []
+
+
+# --- Filter passthrough tests ---
+
+
+def _str_args(fetch_call: call) -> list[str]:
+    """Extract string positional args from a conn.fetch call (skip numpy arrays)."""
+    return [a for a in fetch_call[0] if isinstance(a, str)]
+
+
+@pytest.mark.asyncio
+async def test_search_with_source_type_filter(
+    mock_embedder: AsyncMock, mock_db_pool: AsyncMock
+) -> None:
+    """source_type filter is passed through to SQL queries."""
+    conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+    conn.fetch.side_effect = [[], []]
+
+    retriever = HybridRetriever(mock_db_pool, mock_embedder)
+    await retriever.search("PAYE rates", source_type="legislation")
+
+    for fetch_call in conn.fetch.call_args_list:
+        sql = fetch_call[0][0]
+        str_params = _str_args(fetch_call)
+        assert "s.source_type = $3" in sql
+        assert "legislation" in str_params
+
+
+@pytest.mark.asyncio
+async def test_search_with_tax_year_filter(
+    mock_embedder: AsyncMock, mock_db_pool: AsyncMock
+) -> None:
+    """tax_year filter is passed through to SQL queries."""
+    conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+    conn.fetch.side_effect = [[], []]
+
+    retriever = HybridRetriever(mock_db_pool, mock_embedder)
+    await retriever.search("tax brackets", tax_year="2025-26")
+
+    for fetch_call in conn.fetch.call_args_list:
+        sql = fetch_call[0][0]
+        str_params = _str_args(fetch_call)
+        assert "c.tax_year = $3" in sql
+        assert "2025-26" in str_params
+
+
+@pytest.mark.asyncio
+async def test_search_with_both_filters(
+    mock_embedder: AsyncMock, mock_db_pool: AsyncMock
+) -> None:
+    """Both filters are passed through with correct parameter numbering."""
+    conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+    conn.fetch.side_effect = [[], []]
+
+    retriever = HybridRetriever(mock_db_pool, mock_embedder)
+    await retriever.search("rates", source_type="ird_guidance", tax_year="2024-25")
+
+    for fetch_call in conn.fetch.call_args_list:
+        sql = fetch_call[0][0]
+        str_params = _str_args(fetch_call)
+        assert "s.source_type = $3" in sql
+        assert "c.tax_year = $4" in sql
+        assert "ird_guidance" in str_params
+        assert "2024-25" in str_params
+
+
+@pytest.mark.asyncio
+async def test_search_without_filters_no_extra_params(
+    mock_embedder: AsyncMock, mock_db_pool: AsyncMock
+) -> None:
+    """Without filters, SQL has no extra $3/$4 params."""
+    conn = mock_db_pool.acquire.return_value.__aenter__.return_value
+    conn.fetch.side_effect = [[], []]
+
+    retriever = HybridRetriever(mock_db_pool, mock_embedder)
+    await retriever.search("basic query")
+
+    for fetch_call in conn.fetch.call_args_list:
+        args = fetch_call[0]
+        sql = args[0]
+        assert "$3" not in sql
+        assert "$4" not in sql
