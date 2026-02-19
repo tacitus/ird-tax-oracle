@@ -105,9 +105,17 @@ class SourceReference(BaseModel):
     section_title: str | None = None
 
 
+class ToolUsed(BaseModel):
+    """A tool that was invoked during answer generation."""
+
+    name: str
+    label: str
+
+
 class AskResponse(BaseModel):
     """Response from the /ask endpoint."""
 
     answer: str
     sources: list[SourceReference]
     model: str
+    tools_used: list[ToolUsed] = []
