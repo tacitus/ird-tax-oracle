@@ -1,6 +1,8 @@
 """Async query logging to the query_log table."""
 
+import json
 import logging
+from uuid import UUID
 
 import asyncpg
 
@@ -13,19 +15,53 @@ async def log_query(
     answer: str,
     model: str,
     latency_ms: int,
-) -> None:
-    """Insert a row into query_log. Fire-and-forget — errors are logged, not raised."""
+    tool_calls: list[dict] | None = None,
+) -> UUID | None:
+    """Insert a row into query_log and return its ID.
+
+    Fire-and-forget friendly — errors are logged, not raised.
+    Returns the query_log row UUID on success, None on failure.
+    """
     try:
         async with pool.acquire() as conn:
-            await conn.execute(
+            row = await conn.fetchrow(
                 """
-                INSERT INTO query_log (question, answer, model_used, latency_ms)
-                VALUES ($1, $2, $3, $4)
+                INSERT INTO query_log (question, answer, model_used, latency_ms, tool_calls)
+                VALUES ($1, $2, $3, $4, $5::jsonb)
+                RETURNING id
                 """,
                 question,
                 answer,
                 model,
                 latency_ms,
+                json.dumps(tool_calls) if tool_calls else None,
             )
+            return UUID(str(row["id"])) if row else None
     except Exception:
         logger.exception("Failed to log query")
+        return None
+
+
+async def update_feedback(
+    pool: asyncpg.Pool,
+    query_id: UUID,
+    feedback: str,
+    note: str | None = None,
+) -> bool:
+    """Update feedback on a query_log row. Returns True if row was found."""
+    try:
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE query_log
+                SET feedback = $2, feedback_note = $3
+                WHERE id = $1
+                """,
+                query_id,
+                feedback,
+                note,
+            )
+            return result == "UPDATE 1"
+    except Exception:
+        logger.exception("Failed to update feedback for query %s", query_id)
+        return False

@@ -119,3 +119,4 @@ class AskResponse(BaseModel):
     sources: list[SourceReference]
     model: str
     tools_used: list[ToolUsed] = []
+    query_id: UUID | None = None

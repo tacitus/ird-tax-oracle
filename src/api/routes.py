@@ -3,13 +3,16 @@
 import json
 import logging
 from pathlib import Path
+from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 from src.db.models import AskResponse
+from src.db.query_log import update_feedback
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,14 @@ class AskRequest(BaseModel):
     """Request body for the /ask endpoint."""
 
     question: str
+
+
+class FeedbackRequest(BaseModel):
+    """Request body for the /feedback endpoint."""
+
+    query_id: UUID
+    feedback: Literal["positive", "negative"]
+    note: str | None = None
 
 
 @router.get("/", include_in_schema=False)
@@ -70,3 +81,13 @@ async def ask_stream(body: AskRequest, request: Request) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/feedback")
+async def feedback(body: FeedbackRequest, request: Request) -> JSONResponse:
+    """Record user feedback on an answer."""
+    pool = request.app.state.pool
+    updated = await update_feedback(pool, body.query_id, body.feedback, body.note)
+    if not updated:
+        return JSONResponse({"error": "Query not found"}, status_code=404)
+    return JSONResponse({"status": "ok"})

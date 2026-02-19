@@ -77,7 +77,19 @@
         <h2 class="sources-label">Sources</h2>
         <ul class="sources-list"></ul>
       </div>
-      <div class="model-attr"></div>
+      <div class="answer-footer">
+        <div class="model-attr"></div>
+        <div class="feedback-bar" hidden>
+          <span class="feedback-label">Was this helpful?</span>
+          <button class="feedback-btn" data-feedback="positive" aria-label="Thumbs up">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8.5 1.5l-1 3.5H3a1 1 0 00-1 1v6a1 1 0 001 1h2l1.5 1.5h5a1 1 0 001-.8l1-5a1 1 0 00-1-1.2H9.5l.7-2.5a1.5 1.5 0 00-1.7-1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="feedback-btn" data-feedback="negative" aria-label="Thumbs down">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M7.5 14.5l1-3.5H13a1 1 0 001-1V4a1 1 0 00-1-1h-2L9.5 1.5h-5a1 1 0 00-1 .8l-1 5a1 1 0 001 1.2H6.5l-.7 2.5a1.5 1.5 0 001.7 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+          </button>
+          <span class="feedback-thanks" hidden>Thanks for your feedback!</span>
+        </div>
+      </div>
       <div class="answer-actions">
         <button class="ask-another-btn">Ask another question</button>
         <button class="copy-link-btn" aria-label="Copy link to this question">Copy link</button>

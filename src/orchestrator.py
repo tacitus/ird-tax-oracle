@@ -1,6 +1,5 @@
 """Query orchestrator: retrieve context, call LLM, return grounded answer."""
 
-import asyncio
 import json
 import logging
 import time
@@ -72,6 +71,7 @@ class Orchestrator:
         # 3. LLM completion loop (handles tool calls)
         tool_rounds = 0
         tools_used: list[ToolUsed] = []
+        tool_call_log: list[dict] = []
         result = await self._llm.complete(messages, tools=TOOLS)
 
         while result.tool_calls and tool_rounds < _MAX_TOOL_ROUNDS:
@@ -84,6 +84,7 @@ class Orchestrator:
             for tool_call in result.tool_calls:
                 tool_result = await self._execute_tool(tool_call)
                 name = tool_call.function.name
+                args = json.loads(tool_call.function.arguments)
 
                 # Track tool usage (deduplicated by name)
                 if not any(t.name == name for t in tools_used):
@@ -91,6 +92,9 @@ class Orchestrator:
                         name=name,
                         label=_TOOL_LABELS.get(name, name),
                     ))
+
+                # Log all tool calls (not deduplicated)
+                tool_call_log.append({"name": name, "args": args})
 
                 # Track chunks from follow-up searches
                 if name == "search_tax_documents":
@@ -131,11 +135,13 @@ class Orchestrator:
         answer = strip_trailing_sources(answer)
         answer = linkify_bare_urls(answer, sources)
 
-        # Fire-and-forget query logging
+        # Log query and get ID for feedback
         latency_ms = int((time.monotonic() - start) * 1000)
+        query_id = None
         if self._pool is not None:
-            asyncio.create_task(
-                log_query(self._pool, question, answer, result.model, latency_ms)
+            query_id = await log_query(
+                self._pool, question, answer, result.model, latency_ms,
+                tool_calls=tool_call_log or None,
             )
 
         return AskResponse(
@@ -143,6 +149,7 @@ class Orchestrator:
             sources=sources,
             model=result.model,
             tools_used=tools_used,
+            query_id=query_id,
         )
 
     async def ask_stream(self, question: str) -> AsyncIterator[dict[str, Any]]:
@@ -176,6 +183,7 @@ class Orchestrator:
         # 3. Tool loop (non-streamed) — execute tools before streaming final answer
         tool_rounds = 0
         tools_used_names: set[str] = set()
+        tool_call_log: list[dict] = []
         result = await self._llm.complete(messages, tools=TOOLS)
 
         while result.tool_calls and tool_rounds < _MAX_TOOL_ROUNDS:
@@ -186,6 +194,7 @@ class Orchestrator:
             for tool_call in result.tool_calls:
                 tool_result = await self._execute_tool(tool_call)
                 name = tool_call.function.name
+                args = json.loads(tool_call.function.arguments)
 
                 # Emit tool_use event (deduplicated)
                 if name not in tools_used_names:
@@ -195,6 +204,9 @@ class Orchestrator:
                         "tool": name,
                         "label": _TOOL_LABELS.get(name, name),
                     }
+
+                # Log all tool calls
+                tool_call_log.append({"name": name, "args": args})
 
                 # Track chunks from follow-up searches
                 if name == "search_tax_documents":
@@ -245,17 +257,22 @@ class Orchestrator:
             "type": "sources",
             "sources": [s.model_dump() for s in sources],
         }
-        yield {"type": "done", "model": result.model or self._llm.model}
 
-        # Fire-and-forget query logging
+        # Log query before emitting "done" so we can include query_id
         latency_ms = int((time.monotonic() - start) * 1000)
+        model_name = result.model or self._llm.model
+        query_id = None
         if self._pool is not None:
-            asyncio.create_task(
-                log_query(
-                    self._pool, question, full_answer,
-                    result.model or self._llm.model, latency_ms,
-                )
+            query_id = await log_query(
+                self._pool, question, full_answer, model_name, latency_ms,
+                tool_calls=tool_call_log or None,
             )
+
+        yield {
+            "type": "done",
+            "model": model_name,
+            "query_id": str(query_id) if query_id else None,
+        }
 
     async def _execute_tool(self, tool_call: Any) -> dict[str, Any]:
         """Execute a single tool call and return the result.

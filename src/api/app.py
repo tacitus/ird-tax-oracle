@@ -32,6 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     embedder = GeminiEmbedder()
     retriever = HybridRetriever(pool, embedder)
     llm = LLMGateway()
+    app.state.pool = pool
     app.state.orchestrator = Orchestrator(retriever, llm, pool=pool)
 
     yield

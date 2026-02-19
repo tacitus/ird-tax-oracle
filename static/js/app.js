@@ -13,6 +13,7 @@ const sections = {
 };
 
 let lastQuestion = "";
+let currentQueryId = null;
 
 /* URL permalink helpers */
 function setQueryParam(question) {
@@ -99,6 +100,7 @@ async function submitQuestion(question) {
     $(".tools-used").hidden = true;
     $(".sources").hidden = true;
     $(".model-attr").textContent = "";
+    resetFeedback();
     showState("answer");
 
     let fullText = "";
@@ -143,6 +145,7 @@ async function submitQuestion(question) {
           sources = event.sources || [];
         } else if (event.type === "done") {
           model = event.model || "";
+          currentQueryId = event.query_id || null;
         } else if (event.type === "error") {
           throw new Error(event.message || "Stream error");
         }
@@ -151,9 +154,10 @@ async function submitQuestion(question) {
 
     clearTimeout(timeout);
 
-    /* Render sources and model */
+    /* Render sources, model, and feedback */
     renderSources(sources);
     if (model) $(".model-attr").textContent = `Answered by ${model}`;
+    if (currentQueryId) $(".feedback-bar").hidden = false;
     sections.answer.focus();
   } catch (err) {
     clearTimeout(timeout);
@@ -291,6 +295,11 @@ function renderAnswer(data) {
 
   /* Model attribution */
   $(".model-attr").textContent = `Answered by ${data.model}`;
+
+  /* Feedback */
+  resetFeedback();
+  currentQueryId = data.query_id || null;
+  if (currentQueryId) $(".feedback-bar").hidden = false;
 }
 
 /* Example cards */
@@ -342,6 +351,53 @@ function showCopied(btn) {
     btn.classList.remove("copied");
   }, 2000);
 }
+
+/* Feedback */
+function resetFeedback() {
+  $(".feedback-bar").hidden = true;
+  $(".feedback-thanks").hidden = true;
+  $(".feedback-label").hidden = false;
+  document.querySelectorAll(".feedback-btn").forEach((btn) => {
+    btn.classList.remove("selected");
+    btn.disabled = false;
+    btn.hidden = false;
+  });
+  currentQueryId = null;
+}
+
+document.querySelectorAll(".feedback-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    if (!currentQueryId) return;
+    const feedback = btn.dataset.feedback;
+
+    /* Optimistic UI update */
+    document.querySelectorAll(".feedback-btn").forEach((b) => {
+      b.disabled = true;
+      b.classList.remove("selected");
+    });
+    btn.classList.add("selected");
+
+    try {
+      const resp = await fetch("/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query_id: currentQueryId, feedback }),
+      });
+      if (resp.ok) {
+        $(".feedback-label").hidden = true;
+        document.querySelectorAll(".feedback-btn").forEach((b) => {
+          if (b !== btn) b.hidden = true;
+        });
+        $(".feedback-thanks").hidden = false;
+      }
+    } catch {
+      /* Silently fail — feedback is non-critical */
+      document.querySelectorAll(".feedback-btn").forEach((b) => {
+        b.disabled = false;
+      });
+    }
+  });
+});
 
 /* Retry */
 $(".retry-btn").addEventListener("click", () => {
