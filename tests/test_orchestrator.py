@@ -43,6 +43,7 @@ async def test_ask_happy_path(mock_retriever: AsyncMock, mock_llm: AsyncMock) ->
 
     assert resp.answer == "The top tax rate is 39%."
     assert resp.model == "gemini/gemini-2.5-flash"
+    assert resp.tools_used == []
     assert len(resp.sources) == 2
     assert resp.sources[0].url == "https://ird.govt.nz/rates"
     mock_retriever.search.assert_awaited_once_with("What is the top tax rate?")
@@ -148,6 +149,159 @@ async def test_ask_deduplicates_sources_by_url(
 
     urls = [s.url for s in resp.sources]
     assert urls == ["https://ird.govt.nz/rates", "https://ird.govt.nz/paye"]
+
+
+@pytest.mark.asyncio
+async def test_tool_filters_forwarded_to_retriever(mock_retriever: AsyncMock) -> None:
+    """Tool args with source_type_filter and tax_year_filter are passed to retriever."""
+    followup_chunk = _make_retrieval_result(
+        content="Legislation result",
+        source_url="https://ird.govt.nz/legislation",
+        source_title="Income Tax Act",
+    )
+
+    tool_msg = MagicMock()
+    tool_msg.model_dump.return_value = {"role": "assistant", "tool_calls": []}
+    first_result = CompletionResult(
+        content=None,
+        tool_calls=[_tool_call("search_tax_documents", {
+            "query": "tax rates",
+            "source_type_filter": "legislation",
+            "tax_year_filter": "2024-25",
+        })],
+        raw_message=tool_msg,
+        model="gemini/gemini-2.5-flash",
+    )
+    second_result = CompletionResult(
+        content="The legislation says...",
+        tool_calls=None,
+        raw_message=MagicMock(),
+        model="gemini/gemini-2.5-flash",
+    )
+
+    llm = AsyncMock()
+    llm.complete.side_effect = [first_result, second_result]
+
+    mock_retriever.search.side_effect = [
+        [_make_retrieval_result()],  # initial search
+        [followup_chunk],  # filtered tool search
+    ]
+
+    orch = Orchestrator(mock_retriever, llm)
+    await orch.ask("What does the law say about 2024-25 rates?")
+
+    # Second search call should include filters
+    second_call = mock_retriever.search.call_args_list[1]
+    assert second_call.kwargs.get("source_type") == "legislation"
+    assert second_call.kwargs.get("tax_year") == "2024-25"
+
+
+@pytest.mark.asyncio
+async def test_tool_without_filters_passes_none(mock_retriever: AsyncMock) -> None:
+    """Tool args without optional filters pass None to retriever."""
+    tool_msg = MagicMock()
+    tool_msg.model_dump.return_value = {"role": "assistant", "tool_calls": []}
+    first_result = CompletionResult(
+        content=None,
+        tool_calls=[_tool_call("search_tax_documents", {"query": "kiwisaver"})],
+        raw_message=tool_msg,
+        model="gemini/gemini-2.5-flash",
+    )
+    second_result = CompletionResult(
+        content="KiwiSaver info.",
+        tool_calls=None,
+        raw_message=MagicMock(),
+        model="gemini/gemini-2.5-flash",
+    )
+
+    llm = AsyncMock()
+    llm.complete.side_effect = [first_result, second_result]
+
+    orch = Orchestrator(mock_retriever, llm)
+    await orch.ask("Tell me about KiwiSaver")
+
+    second_call = mock_retriever.search.call_args_list[1]
+    assert second_call.kwargs.get("source_type") is None
+    assert second_call.kwargs.get("tax_year") is None
+
+
+@pytest.mark.asyncio
+async def test_calculator_tool_dispatch(mock_retriever: AsyncMock) -> None:
+    """LLM requests calculate_income_tax -> executes calculator -> feeds result back."""
+    tool_msg = MagicMock()
+    tool_msg.model_dump.return_value = {"role": "assistant", "tool_calls": []}
+
+    first_result = CompletionResult(
+        content=None,
+        tool_calls=[_tool_call("calculate_income_tax", {
+            "annual_income": 65000,
+            "tax_year": "2025-26",
+        })],
+        raw_message=tool_msg,
+        model="gemini/gemini-2.5-flash",
+    )
+    second_result = CompletionResult(
+        content="On $65,000 you'd pay $11,720.50 in income tax.",
+        tool_calls=None,
+        raw_message=MagicMock(),
+        model="gemini/gemini-2.5-flash",
+    )
+
+    llm = AsyncMock()
+    llm.complete.side_effect = [first_result, second_result]
+
+    orch = Orchestrator(mock_retriever, llm)
+    resp = await orch.ask("How much tax on $65,000?")
+
+    assert resp.answer == "On $65,000 you'd pay $11,720.50 in income tax."
+    assert llm.complete.await_count == 2
+    assert len(resp.tools_used) == 1
+    assert resp.tools_used[0].name == "calculate_income_tax"
+    assert resp.tools_used[0].label == "Income tax calculator"
+
+    # Verify the tool result sent back to LLM contains correct calculation
+    second_call_messages = llm.complete.call_args_list[1][0][0]
+    tool_response_msg = [m for m in second_call_messages if m.get("role") == "tool"][0]
+    tool_data = json.loads(tool_response_msg["content"])
+    assert tool_data["total_tax"] == 11720.5
+    assert tool_data["effective_rate"] == 18.03
+
+
+@pytest.mark.asyncio
+async def test_paye_tool_dispatch(mock_retriever: AsyncMock) -> None:
+    """LLM requests calculate_paye -> executes calculator -> answer."""
+    tool_msg = MagicMock()
+    tool_msg.model_dump.return_value = {"role": "assistant", "tool_calls": []}
+
+    first_result = CompletionResult(
+        content=None,
+        tool_calls=[_tool_call("calculate_paye", {
+            "annual_income": 65000,
+            "pay_period": "monthly",
+            "has_student_loan": True,
+        })],
+        raw_message=tool_msg,
+        model="gemini/gemini-2.5-flash",
+    )
+    second_result = CompletionResult(
+        content="Your monthly take-home would be...",
+        tool_calls=None,
+        raw_message=MagicMock(),
+        model="gemini/gemini-2.5-flash",
+    )
+
+    llm = AsyncMock()
+    llm.complete.side_effect = [first_result, second_result]
+
+    orch = Orchestrator(mock_retriever, llm)
+    await orch.ask("What's my take-home on $65k monthly with student loan?")
+
+    assert llm.complete.await_count == 2
+    second_call_messages = llm.complete.call_args_list[1][0][0]
+    tool_response_msg = [m for m in second_call_messages if m.get("role") == "tool"][0]
+    tool_data = json.loads(tool_response_msg["content"])
+    assert "annual" in tool_data
+    assert tool_data["annual"]["student_loan"] > 0
 
 
 @pytest.mark.asyncio

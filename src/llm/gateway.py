@@ -1,6 +1,7 @@
 """Thin async wrapper around LiteLLM for LLM completions."""
 
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 import litellm
@@ -58,3 +59,28 @@ class LLMGateway:
             raw_message=message,
             model=response.model or self.model,
         )
+
+    async def stream(
+        self,
+        messages: list[dict[str, Any]],
+    ) -> AsyncIterator[str]:
+        """Stream LLM response, yielding content deltas.
+
+        Args:
+            messages: OpenAI-format message list.
+
+        Yields:
+            Content delta strings as they arrive.
+        """
+        logger.info("Streaming LLM model=%s", self.model)
+        response = await litellm.acompletion(
+            model=self.model,
+            messages=messages,
+            temperature=0.1,
+            stream=True,
+        )
+
+        async for chunk in response:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                yield delta.content
