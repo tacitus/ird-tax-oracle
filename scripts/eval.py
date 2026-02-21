@@ -9,6 +9,7 @@ Usage:
 
 import asyncio
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -21,8 +22,12 @@ from src.orchestrator import Orchestrator
 from src.rag.embedder import GeminiEmbedder
 from src.rag.retriever import HybridRetriever
 
+# Matches markdown links: [text](url)
+_MARKDOWN_LINK_RE = re.compile(r"\[.+?\]\(https?://[^\s)]+\)")
+
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 SCENARIOS_PATH = Path(__file__).parent.parent / "tests" / "eval" / "test_scenarios.yaml"
 
@@ -106,6 +111,7 @@ async def evaluate_answers(
         answer_lower = response.answer.lower()
         keywords = scenario.get("answer_keywords", [])
         keyword_hits = sum(1 for kw in keywords if kw.lower() in answer_lower)
+        has_citation = bool(_MARKDOWN_LINK_RE.search(response.answer))
 
         results.append({
             "id": scenario["id"],
@@ -113,12 +119,14 @@ async def evaluate_answers(
             "keyword_hits": keyword_hits,
             "keyword_total": len(keywords),
             "keyword_precision": keyword_hits / len(keywords) if keywords else 1.0,
+            "has_citation": has_citation,
             "num_sources": len(response.sources),
             "latency_ms": latency_ms,
             "model": response.model,
         })
 
     successful = [r for r in results if "error" not in r]
+    cited = sum(1 for r in successful if r.get("has_citation"))
     return {
         "total": len(results),
         "errors": len(results) - len(successful),
@@ -126,6 +134,7 @@ async def evaluate_answers(
             sum(r["keyword_precision"] for r in successful) / len(successful)
             if successful else 0
         ),
+        "citation_rate": cited / len(successful) if successful else 0,
         "avg_latency_ms": (
             sum(r["latency_ms"] for r in successful) / len(successful)
             if successful else 0
@@ -137,7 +146,7 @@ async def evaluate_answers(
 async def main() -> None:
     """Run the full evaluation suite."""
     scenarios = load_scenarios()
-    print(f"Loaded {len(scenarios)} evaluation scenarios\n")
+    logger.info("Loaded %d evaluation scenarios", len(scenarios))
 
     pool = await get_pool()
     embedder = GeminiEmbedder()
@@ -146,48 +155,52 @@ async def main() -> None:
     orchestrator = Orchestrator(retriever, llm, pool=pool)
 
     # Retrieval evaluation
-    print("=" * 60)
-    print("RETRIEVAL EVALUATION")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("RETRIEVAL EVALUATION")
+    logger.info("=" * 60)
     retrieval_results = await evaluate_retrieval(retriever, scenarios)
-    print(f"Scenarios evaluated: {retrieval_results['total']}")
-    print(f"Avg source type precision: {retrieval_results['avg_type_precision']:.1%}")
-    print(f"Avg URL fragment precision: {retrieval_results['avg_url_precision']:.1%}")
-    print(f"Avg latency: {retrieval_results['avg_latency_ms']:.0f}ms")
+    logger.info("Scenarios evaluated: %d", retrieval_results["total"])
+    logger.info("Avg source type precision: %.1f%%", retrieval_results["avg_type_precision"] * 100)
+    logger.info("Avg URL fragment precision: %.1f%%", retrieval_results["avg_url_precision"] * 100)
+    logger.info("Avg latency: %.0fms", retrieval_results["avg_latency_ms"])
 
-    print("\nPer-scenario retrieval:")
+    logger.info("Per-scenario retrieval:")
     for detail in retrieval_results["details"]:
         is_pass = detail["type_precision"] == 1.0 and detail["url_precision"] == 1.0
         status = "PASS" if is_pass else "MISS"
-        print(
-            f"  [{status}] {detail['id']:40s} "
-            f"types={detail['type_precision']:.0%} "
-            f"urls={detail['url_precision']:.0%} "
-            f"results={detail['num_results']} "
-            f"({detail['latency_ms']}ms)"
+        logger.info(
+            "  [%s] %-40s types=%.0f%% urls=%.0f%% results=%d (%dms)",
+            status, detail["id"],
+            detail["type_precision"] * 100,
+            detail["url_precision"] * 100,
+            detail["num_results"],
+            detail["latency_ms"],
         )
 
     # End-to-end evaluation
-    print("\n" + "=" * 60)
-    print("END-TO-END ANSWER EVALUATION")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("END-TO-END ANSWER EVALUATION")
+    logger.info("=" * 60)
     answer_results = await evaluate_answers(orchestrator, scenarios)
-    print(f"Scenarios evaluated: {answer_results['total']}")
-    print(f"Errors: {answer_results['errors']}")
-    print(f"Avg keyword precision: {answer_results['avg_keyword_precision']:.1%}")
-    print(f"Avg latency: {answer_results['avg_latency_ms']:.0f}ms")
+    logger.info("Scenarios evaluated: %d", answer_results["total"])
+    logger.info("Errors: %d", answer_results["errors"])
+    logger.info("Avg keyword precision: %.1f%%", answer_results["avg_keyword_precision"] * 100)
+    logger.info("Citation rate: %.1f%%", answer_results["citation_rate"] * 100)
+    logger.info("Avg latency: %.0fms", answer_results["avg_latency_ms"])
 
-    print("\nPer-scenario answers:")
+    logger.info("Per-scenario answers:")
     for detail in answer_results["details"]:
         if "error" in detail:
-            print(f"  [ERR ] {detail['id']:40s} {detail['error']}")
+            logger.info("  [ERR ] %-40s %s", detail["id"], detail["error"])
         else:
             status = "PASS" if detail["keyword_precision"] == 1.0 else "MISS"
-            print(
-                f"  [{status}] {detail['id']:40s} "
-                f"keywords={detail['keyword_hits']}/{detail['keyword_total']} "
-                f"sources={detail['num_sources']} "
-                f"({detail['latency_ms']}ms)"
+            cite = "cited" if detail.get("has_citation") else "NO-CITE"
+            logger.info(
+                "  [%s] %-40s keywords=%d/%d sources=%d %s (%dms)",
+                status, detail["id"],
+                detail["keyword_hits"], detail["keyword_total"],
+                detail["num_sources"], cite,
+                detail["latency_ms"],
             )
 
     from src.db.session import close_pool

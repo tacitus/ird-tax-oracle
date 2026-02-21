@@ -60,7 +60,7 @@ TAX_YEARS: dict[str, TaxYearData] = {
     "2023-24": TaxYearData(
         brackets=_BRACKETS_PRE_2024,
         acc=AccLevy(
-            rate=Decimal("0.0153"),
+            rate=Decimal("0.0153"),  # $1.53 per $100 incl. GST
             max_liable_earnings=Decimal("139384"),
         ),
         student_loan=StudentLoanThreshold(
@@ -71,22 +71,23 @@ TAX_YEARS: dict[str, TaxYearData] = {
     "2024-25": TaxYearData(
         brackets=_BRACKETS_2024,
         acc=AccLevy(
-            rate=Decimal("0.0153"),
+            rate=Decimal("0.0160"),  # $1.60 per $100 incl. GST (from 1 Apr 2024)
             max_liable_earnings=Decimal("142283"),
         ),
         student_loan=StudentLoanThreshold(
-            annual_threshold=Decimal("22828"),
+            annual_threshold=Decimal("24128"),  # increased from 1 Apr 2024
             repayment_rate=Decimal("0.12"),
         ),
     ),
+    # Source: IRD ACC earners' levy rates page, ird.govt.nz
     "2025-26": TaxYearData(
         brackets=_BRACKETS_2024,
         acc=AccLevy(
-            rate=Decimal("0.013"),
-            max_liable_earnings=Decimal("145014"),
+            rate=Decimal("0.0167"),  # $1.67 per $100 incl. GST (from 1 Apr 2025)
+            max_liable_earnings=Decimal("152790"),
         ),
         student_loan=StudentLoanThreshold(
-            annual_threshold=Decimal("22828"),
+            annual_threshold=Decimal("24128"),  # frozen at 2024-25 level
             repayment_rate=Decimal("0.12"),
         ),
     ),

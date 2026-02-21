@@ -33,6 +33,9 @@ SEARCH_TAX_DOCUMENTS: dict[str, Any] = {
                         "tib",
                         "guide_pdf",
                         "interpretation_statement",
+                        "qwba",
+                        "fact_sheet",
+                        "operational_statement",
                     ],
                     "description": (
                         "Optional: filter results to a specific source type. "
@@ -90,7 +93,10 @@ CALCULATE_PAYE: dict[str, Any] = {
         "description": (
             "Calculate PAYE deductions per pay period, including income tax, "
             "ACC earner's levy, and optional student loan repayment. Use when "
-            "asked about take-home pay, net pay, or PAYE deductions."
+            "asked about take-home pay, net pay, or PAYE deductions. "
+            "Limitations: assumes tax code M or ME (standard employee), "
+            "does not include KiwiSaver employee/employer contributions, "
+            "and does not handle secondary employment tax codes."
         ),
         "parameters": {
             "type": "object",

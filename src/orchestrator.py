@@ -7,6 +7,7 @@ from collections import Counter
 from collections.abc import AsyncIterator
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 import asyncpg
 
@@ -14,17 +15,19 @@ from src.calculators.acc import calculate_acc_levy
 from src.calculators.income_tax import calculate_income_tax
 from src.calculators.paye import calculate_paye
 from src.calculators.student_loan import calculate_student_loan_repayment
-from src.db.models import AskResponse, SourceReference, ToolUsed
+from src.db.models import AskResponse, ConversationTurn, SourceReference, ToolUsed
 from src.db.query_log import log_query
 from src.llm.gateway import LLMGateway
-from src.llm.postprocess import linkify_bare_urls, strip_trailing_sources
+from src.llm.postprocess import ensure_citations, linkify_bare_urls, strip_trailing_sources
 from src.llm.prompts import build_rag_messages
+from src.llm.query_rewriter import rewrite_query
 from src.llm.tools import TOOLS
 from src.rag.retriever import HybridRetriever
 
 logger = logging.getLogger(__name__)
 
 _MAX_TOOL_ROUNDS = 3
+_RESPONSE_CACHE_TTL = 300  # 5 minutes
 
 _TOOL_LABELS: dict[str, str] = {
     "calculate_income_tax": "Income tax calculator",
@@ -33,6 +36,16 @@ _TOOL_LABELS: dict[str, str] = {
     "calculate_acc_levy": "ACC levy calculator",
     "search_tax_documents": "Document search",
 }
+
+
+class _CacheEntry:
+    """A cached response with expiration time."""
+
+    __slots__ = ("response", "expires_at")
+
+    def __init__(self, response: AskResponse, ttl: int) -> None:
+        self.response = response
+        self.expires_at = time.monotonic() + ttl
 
 
 class Orchestrator:
@@ -47,31 +60,59 @@ class Orchestrator:
         self._retriever = retriever
         self._llm = llm
         self._pool = pool
+        self._response_cache: dict[str, _CacheEntry] = {}
 
-    async def ask(self, question: str) -> AskResponse:
+    async def ask(
+        self,
+        question: str,
+        history: list[ConversationTurn] | None = None,
+    ) -> AskResponse:
         """Answer a tax question using RAG with tool-call support.
 
         Args:
             question: The user's natural-language tax question.
+            history: Prior conversation turns for multi-turn context.
 
         Returns:
             AskResponse with answer text, source citations, and model name.
         """
+        # Check response cache (skip when conversation has history)
+        cache_key = question.strip().lower()
+        if not history:
+            cached = self._response_cache.get(cache_key)
+            if cached and cached.expires_at > time.monotonic():
+                logger.info("Response cache hit for: %s", question[:80])
+                return cached.response
+            elif cached:
+                del self._response_cache[cache_key]
+
         start = time.monotonic()
         logger.info("Processing question: %s", question[:80])
 
-        # 1. Initial retrieval
-        chunks = await self._retriever.search(question)
+        # 1. Rewrite follow-ups into standalone queries for retrieval
+        retrieval_query = question
+        if history:
+            retrieval_query = await rewrite_query(
+                self._llm, question, history
+            )
+
+        # 2. Initial retrieval (uses rewritten query)
+        retrieval_start = time.monotonic()
+        chunks = await self._retriever.search(retrieval_query)
         all_chunks = list(chunks)
-        logger.info("Retrieved %d chunks", len(chunks))
+        retrieval_ms = int((time.monotonic() - retrieval_start) * 1000)
+        logger.info("Retrieved %d chunks in %dms", len(chunks), retrieval_ms)
 
-        # 2. Build messages
-        messages: list[dict[str, Any]] = build_rag_messages(question, chunks)
+        # 3. Build messages (with original question + history)
+        messages: list[dict[str, Any]] = build_rag_messages(
+            question, chunks, history=history
+        )
 
-        # 3. LLM completion loop (handles tool calls)
+        # 4. LLM completion loop (handles tool calls)
         tool_rounds = 0
         tools_used: list[ToolUsed] = []
         tool_call_log: list[dict] = []
+        llm_start = time.monotonic()
         result = await self._llm.complete(messages, tools=TOOLS)
 
         while result.tool_calls and tool_rounds < _MAX_TOOL_ROUNDS:
@@ -112,6 +153,11 @@ class Orchestrator:
 
             result = await self._llm.complete(messages, tools=TOOLS)
 
+        llm_ms = int((time.monotonic() - llm_start) * 1000)
+        logger.info(
+            "LLM completed in %dms (tool_rounds=%d)", llm_ms, tool_rounds
+        )
+
         answer = result.content or ""
 
         # Deduplicate sources by URL; only show section_title when one chunk per URL
@@ -131,9 +177,15 @@ class Orchestrator:
                     )
                 )
 
-        # Post-process: strip duplicate sources block, linkify bare URLs
+        # Post-process: strip duplicate sources block, linkify URLs, ensure citations
         answer = strip_trailing_sources(answer)
         answer = linkify_bare_urls(answer, sources)
+        answer = ensure_citations(answer, sources)
+
+        # Collect chunk IDs for logging
+        chunk_ids: list[UUID] = [
+            c.chunk_id for c in all_chunks if c.chunk_id is not None
+        ]
 
         # Log query and get ID for feedback
         latency_ms = int((time.monotonic() - start) * 1000)
@@ -142,9 +194,10 @@ class Orchestrator:
             query_id = await log_query(
                 self._pool, question, answer, result.model, latency_ms,
                 tool_calls=tool_call_log or None,
+                chunk_ids=chunk_ids or None,
             )
 
-        return AskResponse(
+        response = AskResponse(
             answer=answer,
             sources=sources,
             model=result.model,
@@ -152,7 +205,19 @@ class Orchestrator:
             query_id=query_id,
         )
 
-    async def ask_stream(self, question: str) -> AsyncIterator[dict[str, Any]]:
+        # Cache the response for identical subsequent questions (skip with history)
+        if not history:
+            self._response_cache[cache_key] = _CacheEntry(
+                response, _RESPONSE_CACHE_TTL
+            )
+
+        return response
+
+    async def ask_stream(
+        self,
+        question: str,
+        history: list[ConversationTurn] | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
         """Stream an answer to a tax question via SSE-compatible events.
 
         Yields dicts with event type and payload:
@@ -164,27 +229,39 @@ class Orchestrator:
 
         Args:
             question: The user's natural-language tax question.
+            history: Prior conversation turns for multi-turn context.
         """
         start = time.monotonic()
         logger.info("Streaming question: %s", question[:80])
 
         yield {"type": "status", "message": "Searching tax documents..."}
 
-        # 1. Retrieve context
-        chunks = await self._retriever.search(question)
+        # 1. Rewrite follow-ups for better retrieval
+        retrieval_query = question
+        if history:
+            retrieval_query = await rewrite_query(
+                self._llm, question, history
+            )
+
+        # 2. Retrieve context (uses rewritten query)
+        chunks = await self._retriever.search(retrieval_query)
         all_chunks = list(chunks)
         logger.info("Retrieved %d chunks for stream", len(chunks))
 
         yield {"type": "status", "message": "Generating answer..."}
 
-        # 2. Build messages
-        messages: list[dict[str, Any]] = build_rag_messages(question, chunks)
+        # 3. Build messages (with original question + history)
+        messages: list[dict[str, Any]] = build_rag_messages(
+            question, chunks, history=history
+        )
 
-        # 3. Tool loop (non-streamed) — execute tools before streaming final answer
+        # 4. Tool loop (non-streamed) — resolve tool calls before streaming
         tool_rounds = 0
         tools_used_names: set[str] = set()
         tool_call_log: list[dict] = []
+        model_name = self._llm.model
         result = await self._llm.complete(messages, tools=TOOLS)
+        model_name = result.model or model_name
 
         while result.tool_calls and tool_rounds < _MAX_TOOL_ROUNDS:
             tool_rounds += 1
@@ -223,18 +300,13 @@ class Orchestrator:
                 })
 
             result = await self._llm.complete(messages, tools=TOOLS)
+            model_name = result.model or model_name
 
-        # 4. Stream the final LLM response
-        if result.content:
-            # LLM already gave a final text answer (no streaming needed)
-            full_answer = result.content
-            yield {"type": "chunk", "delta": full_answer}
-        else:
-            # Stream from scratch with the full message history
-            full_answer = ""
-            async for delta in self._llm.stream(messages):
-                full_answer += delta
-                yield {"type": "chunk", "delta": delta}
+        # 4. Stream the final LLM response token-by-token
+        full_answer = ""
+        async for delta in self._llm.stream(messages):
+            full_answer += delta
+            yield {"type": "chunk", "delta": delta}
 
         # 5. Build sources; only show section_title when one chunk per URL
         url_counts = Counter(c.source_url for c in all_chunks)
@@ -253,19 +325,29 @@ class Orchestrator:
                     )
                 )
 
+        # Post-process the accumulated answer for logging
+        full_answer = strip_trailing_sources(full_answer)
+        full_answer = linkify_bare_urls(full_answer, sources)
+        full_answer = ensure_citations(full_answer, sources)
+
         yield {
             "type": "sources",
             "sources": [s.model_dump() for s in sources],
         }
 
+        # Collect chunk IDs for logging
+        chunk_ids: list[UUID] = [
+            c.chunk_id for c in all_chunks if c.chunk_id is not None
+        ]
+
         # Log query before emitting "done" so we can include query_id
         latency_ms = int((time.monotonic() - start) * 1000)
-        model_name = result.model or self._llm.model
         query_id = None
         if self._pool is not None:
             query_id = await log_query(
                 self._pool, question, full_answer, model_name, latency_ms,
                 tool_calls=tool_call_log or None,
+                chunk_ids=chunk_ids or None,
             )
 
         yield {

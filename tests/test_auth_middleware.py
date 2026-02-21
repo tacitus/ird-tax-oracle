@@ -8,9 +8,6 @@ from fastapi.testclient import TestClient
 
 from src.api.app import BasicAuthMiddleware
 
-_TEST_USER = b"testuser"
-_TEST_PASS = b"testpass123"
-
 
 def _build_app() -> FastAPI:
     """Build a minimal app with BasicAuthMiddleware for testing."""
@@ -30,8 +27,8 @@ def _auth_header(username: str, password: str) -> dict[str, str]:
     return {"Authorization": f"Basic {creds}"}
 
 
-@patch("src.api.app.AUTH_USERNAME", _TEST_USER)
-@patch("src.api.app.AUTH_PASSWORD", _TEST_PASS)
+@patch("src.api.app.settings.auth_username", "testuser")
+@patch("src.api.app.settings.auth_password", "testpass123")
 def test_valid_credentials_pass() -> None:
     """Correct credentials return 200."""
     app = _build_app()
@@ -41,8 +38,8 @@ def test_valid_credentials_pass() -> None:
     assert response.json() == {"status": "ok"}
 
 
-@patch("src.api.app.AUTH_USERNAME", _TEST_USER)
-@patch("src.api.app.AUTH_PASSWORD", _TEST_PASS)
+@patch("src.api.app.settings.auth_username", "testuser")
+@patch("src.api.app.settings.auth_password", "testpass123")
 def test_missing_auth_header_returns_401() -> None:
     """No Authorization header returns 401 with WWW-Authenticate."""
     app = _build_app()
@@ -52,8 +49,8 @@ def test_missing_auth_header_returns_401() -> None:
     assert response.headers["WWW-Authenticate"] == "Basic"
 
 
-@patch("src.api.app.AUTH_USERNAME", _TEST_USER)
-@patch("src.api.app.AUTH_PASSWORD", _TEST_PASS)
+@patch("src.api.app.settings.auth_username", "testuser")
+@patch("src.api.app.settings.auth_password", "testpass123")
 def test_invalid_credentials_returns_401() -> None:
     """Wrong password returns 401."""
     app = _build_app()
@@ -62,8 +59,8 @@ def test_invalid_credentials_returns_401() -> None:
     assert response.status_code == 401
 
 
-@patch("src.api.app.AUTH_USERNAME", _TEST_USER)
-@patch("src.api.app.AUTH_PASSWORD", _TEST_PASS)
+@patch("src.api.app.settings.auth_username", "testuser")
+@patch("src.api.app.settings.auth_password", "testpass123")
 def test_malformed_base64_returns_401() -> None:
     """Garbage in Authorization header returns 401."""
     app = _build_app()

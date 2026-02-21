@@ -1,19 +1,23 @@
-/* NZ Tax RAG — Frontend */
+/* NZ Tax RAG — Frontend with Conversation Support */
 
 const $ = (sel) => document.querySelector(sel);
 const textarea = $("#question");
 const form = $("#ask-form");
 const askBtn = $(".ask-btn");
 const sections = {
-  ask: $(".ask-card"),
   examples: $(".examples-section"),
-  loading: $(".loading-section"),
-  answer: $(".answer-section"),
   error: $(".error-section"),
+  conversation: $(".conversation-container"),
+  disclaimer: $(".disclaimer"),
 };
+const newConvBtn = $(".new-conversation-btn");
 
+const MAX_HISTORY = 5;
+let conversationHistory = []; // {question, answer} pairs
 let lastQuestion = "";
 let currentQueryId = null;
+let currentAnswerEl = null; // the active .conv-answer element being streamed into
+let typingIndicatorEl = null; // the active typing indicator element
 
 /* URL permalink helpers */
 function setQueryParam(question) {
@@ -33,13 +37,53 @@ function getQueryParam() {
   return new URLSearchParams(window.location.search).get("q");
 }
 
-function showState(state) {
-  sections.loading.hidden = state !== "loading";
-  sections.answer.hidden = state !== "answer";
-  sections.error.hidden = state !== "error";
-  sections.examples.hidden = state === "loading" || state === "answer";
-  sections.ask.hidden = state === "loading";
-  askBtn.disabled = state === "loading";
+/* Inline typing indicator */
+function showTypingIndicator() {
+  const el = document.createElement("div");
+  el.className = "conv-typing-indicator";
+  el.setAttribute("role", "status");
+  el.setAttribute("aria-live", "polite");
+  el.innerHTML = `
+    <div class="loading-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="typing-status">Searching IRD guidance...</div>
+  `;
+  sections.conversation.appendChild(el);
+  typingIndicatorEl = el;
+  scrollToBottom();
+}
+
+function removeTypingIndicator() {
+  if (typingIndicatorEl) {
+    typingIndicatorEl.remove();
+    typingIndicatorEl = null;
+  }
+}
+
+/* State management */
+function showLanding() {
+  sections.examples.hidden = false;
+  sections.error.hidden = true;
+  sections.conversation.hidden = true;
+  sections.disclaimer.hidden = false;
+  newConvBtn.hidden = true;
+  askBtn.disabled = false;
+  removeTypingIndicator();
+}
+
+function showConversation() {
+  sections.examples.hidden = true;
+  sections.error.hidden = true;
+  sections.conversation.hidden = false;
+  newConvBtn.hidden = false;
+  askBtn.disabled = false;
+}
+
+function showError(msg) {
+  removeTypingIndicator();
+  sections.error.hidden = false;
+  $(".error-section p").textContent = msg;
+  sections.error.focus();
+  askBtn.disabled = false;
 }
 
 /* Auto-resize textarea */
@@ -62,13 +106,74 @@ form.addEventListener("submit", async (e) => {
   const question = textarea.value.trim();
   if (!question) return;
   lastQuestion = question;
+  textarea.value = "";
+  textarea.style.height = "auto";
   await submitQuestion(question);
 });
+
+/* Add a user question bubble to the conversation */
+function addQuestionBubble(question) {
+  const bubble = document.createElement("div");
+  bubble.className = "conv-question";
+  bubble.textContent = question;
+  sections.conversation.appendChild(bubble);
+}
+
+/* Create an answer block and append to conversation. Returns the element. */
+function createAnswerBlock() {
+  const block = document.createElement("div");
+  block.className = "conv-answer";
+  block.tabIndex = -1;
+  block.innerHTML = `
+    <div class="tools-used" hidden aria-label="Tools used"></div>
+    <div class="answer-content"></div>
+    <div class="sources" hidden>
+      <h2 class="sources-label">Sources</h2>
+      <ul class="sources-list"></ul>
+    </div>
+    <div class="answer-footer">
+      <div class="model-attr"></div>
+      <div class="feedback-bar" hidden>
+        <span class="feedback-label">Was this helpful?</span>
+        <button class="feedback-btn" data-feedback="positive" aria-label="Thumbs up">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8.5 1.5l-1 3.5H3a1 1 0 00-1 1v6a1 1 0 001 1h2l1.5 1.5h5a1 1 0 001-.8l1-5a1 1 0 00-1-1.2H9.5l.7-2.5a1.5 1.5 0 00-1.7-1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="feedback-btn" data-feedback="negative" aria-label="Thumbs down">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M7.5 14.5l1-3.5H13a1 1 0 001-1V4a1 1 0 00-1-1h-2L9.5 1.5h-5a1 1 0 00-1 .8l-1 5a1 1 0 001 1.2H6.5l-.7 2.5a1.5 1.5 0 001.7 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>
+        </button>
+        <span class="feedback-thanks" hidden>Thanks for your feedback!</span>
+      </div>
+    </div>
+  `;
+  sections.conversation.appendChild(block);
+
+  // Wire up feedback buttons for this answer block
+  block.querySelectorAll(".feedback-btn").forEach((btn) => {
+    btn.addEventListener("click", () => handleFeedback(btn, block));
+  });
+
+  return block;
+}
+
+/* Scroll to the bottom of the conversation */
+function scrollToBottom() {
+  window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+}
 
 /* Main submit — try streaming, fall back to non-streaming */
 async function submitQuestion(question) {
   setQueryParam(question);
-  showState("loading");
+
+  // Switch to conversation mode
+  sections.examples.hidden = true;
+  sections.conversation.hidden = false;
+  sections.error.hidden = true;
+  newConvBtn.hidden = false;
+
+  // Add question bubble + inline typing indicator
+  addQuestionBubble(question);
+  askBtn.disabled = true;
+  showTypingIndicator();
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120_000);
@@ -78,7 +183,10 @@ async function submitQuestion(question) {
     const resp = await fetch("/ask/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({
+        question,
+        history: conversationHistory.slice(-MAX_HISTORY),
+      }),
       signal: controller.signal,
     });
 
@@ -94,18 +202,10 @@ async function submitQuestion(question) {
       throw new Error(body?.detail || `Server error (${resp.status})`);
     }
 
-    /* Switch to answer state and start streaming */
-    $(".answer-content").innerHTML = "";
-    $(".tools-used").innerHTML = "";
-    $(".tools-used").hidden = true;
-    $(".sources").hidden = true;
-    $(".model-attr").textContent = "";
-    resetFeedback();
-    showState("answer");
-
     let fullText = "";
     let sources = [];
     let model = "";
+    let answerStarted = false;
 
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
@@ -132,15 +232,32 @@ async function submitQuestion(question) {
         }
 
         if (event.type === "status") {
-          $(".loading-text").textContent = event.message;
+          if (typingIndicatorEl) {
+            const statusEl = typingIndicatorEl.querySelector(".typing-status");
+            if (statusEl) statusEl.textContent = event.message;
+          }
         } else if (event.type === "tool_use") {
-          addToolPill(event.label || event.tool, event.tool);
+          // Create answer block on first tool_use if not yet created
+          if (!answerStarted) {
+            removeTypingIndicator();
+            currentAnswerEl = createAnswerBlock();
+            answerStarted = true;
+          }
+          addToolPillTo(currentAnswerEl, event.label || event.tool, event.tool);
+          scrollToBottom();
         } else if (event.type === "chunk") {
+          // Create answer block on first chunk if not yet created
+          if (!answerStarted) {
+            removeTypingIndicator();
+            currentAnswerEl = createAnswerBlock();
+            answerStarted = true;
+          }
           fullText += event.delta;
           const html = DOMPurify.sanitize(marked.parse(fullText), {
             ADD_ATTR: ["target"],
           });
-          $(".answer-content").innerHTML = html;
+          currentAnswerEl.querySelector(".answer-content").innerHTML = html;
+          scrollToBottom();
         } else if (event.type === "sources") {
           sources = event.sources || [];
         } else if (event.type === "done") {
@@ -154,26 +271,54 @@ async function submitQuestion(question) {
 
     clearTimeout(timeout);
 
+    // Ensure indicator is removed even if no chunks arrived
+    removeTypingIndicator();
+
+    // If no answer block was created (edge case), create one now
+    if (!currentAnswerEl) {
+      currentAnswerEl = createAnswerBlock();
+    }
+
     /* Render sources, model, and feedback */
-    renderSources(sources);
-    if (model) $(".model-attr").textContent = `Answered by ${model}`;
-    if (currentQueryId) $(".feedback-bar").hidden = false;
-    sections.answer.focus();
+    renderSourcesIn(currentAnswerEl, sources);
+    if (model) {
+      currentAnswerEl.querySelector(".model-attr").textContent = `Answered by ${model}`;
+    }
+    if (currentQueryId) {
+      currentAnswerEl.querySelector(".feedback-bar").hidden = false;
+      // Store query_id on the element for feedback
+      currentAnswerEl.dataset.queryId = currentQueryId;
+    }
+
+    // Push to conversation history
+    conversationHistory.push({ question, answer: fullText });
+    // Cap history
+    if (conversationHistory.length > MAX_HISTORY) {
+      conversationHistory = conversationHistory.slice(-MAX_HISTORY);
+    }
+
+    showConversation();
+    textarea.focus();
+    scrollToBottom();
   } catch (err) {
     clearTimeout(timeout);
+    removeTypingIndicator();
     const msg =
       err.name === "AbortError"
-        ? "Request timed out. The server may be busy — please try again."
+        ? "Request timed out. The server may be busy \u2014 please try again."
         : err.message || "Something went wrong.";
-    $(".error-section p").textContent = msg;
-    showState("error");
-    sections.error.focus();
+    showError(msg);
   }
 }
 
 /* Non-streaming fallback */
 async function submitQuestionFallback(question) {
-  showState("loading");
+  // Typing indicator is already showing from submitQuestion;
+  // if called directly, ensure it's visible
+  if (!typingIndicatorEl) {
+    askBtn.disabled = true;
+    showTypingIndicator();
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
@@ -182,7 +327,10 @@ async function submitQuestionFallback(question) {
     const resp = await fetch("/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({
+        question,
+        history: conversationHistory.slice(-MAX_HISTORY),
+      }),
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -193,18 +341,54 @@ async function submitQuestionFallback(question) {
     }
 
     const data = await resp.json();
-    renderAnswer(data);
-    showState("answer");
-    sections.answer.focus();
+
+    removeTypingIndicator();
+    currentAnswerEl = createAnswerBlock();
+
+    // Render tools
+    if (data.tools_used && data.tools_used.length) {
+      data.tools_used.forEach((t) =>
+        addToolPillTo(currentAnswerEl, t.label, t.name)
+      );
+    }
+
+    // Render answer
+    const html = DOMPurify.sanitize(marked.parse(data.answer), {
+      ADD_ATTR: ["target"],
+    });
+    currentAnswerEl.querySelector(".answer-content").innerHTML = html;
+
+    // Render sources
+    renderSourcesIn(currentAnswerEl, data.sources);
+
+    // Model attribution
+    currentAnswerEl.querySelector(".model-attr").textContent =
+      `Answered by ${data.model}`;
+
+    // Feedback
+    currentQueryId = data.query_id || null;
+    if (currentQueryId) {
+      currentAnswerEl.querySelector(".feedback-bar").hidden = false;
+      currentAnswerEl.dataset.queryId = currentQueryId;
+    }
+
+    // Push to history
+    conversationHistory.push({ question, answer: data.answer });
+    if (conversationHistory.length > MAX_HISTORY) {
+      conversationHistory = conversationHistory.slice(-MAX_HISTORY);
+    }
+
+    showConversation();
+    textarea.focus();
+    scrollToBottom();
   } catch (err) {
     clearTimeout(timeout);
+    removeTypingIndicator();
     const msg =
       err.name === "AbortError"
-        ? "Request timed out. The server may be busy — please try again."
+        ? "Request timed out. The server may be busy \u2014 please try again."
         : err.message || "Something went wrong.";
-    $(".error-section p").textContent = msg;
-    showState("error");
-    sections.error.focus();
+    showError(msg);
   }
 }
 
@@ -224,8 +408,8 @@ const TOOL_ICONS = {
   search_tax_documents: "\u{1F50D}",
 };
 
-function addToolPill(label, toolName) {
-  const container = $(".tools-used");
+function addToolPillTo(answerEl, label, toolName) {
+  const container = answerEl.querySelector(".tools-used");
   const pill = document.createElement("span");
   pill.className = "tool-pill";
   const icon = document.createElement("span");
@@ -238,18 +422,9 @@ function addToolPill(label, toolName) {
   container.hidden = false;
 }
 
-function renderToolsUsed(toolsUsed) {
-  const container = $(".tools-used");
-  container.innerHTML = "";
-  if (toolsUsed && toolsUsed.length) {
-    toolsUsed.forEach((t) => addToolPill(t.label, t.name));
-  } else {
-    container.hidden = true;
-  }
-}
-
-function renderSources(sources) {
-  const list = $(".sources-list");
+function renderSourcesIn(answerEl, sources) {
+  const sourcesEl = answerEl.querySelector(".sources");
+  const list = answerEl.querySelector(".sources-list");
   list.innerHTML = "";
   if (sources && sources.length) {
     sources.forEach((s) => {
@@ -274,130 +449,67 @@ function renderSources(sources) {
       }
       list.appendChild(li);
     });
-    $(".sources").hidden = false;
+    sourcesEl.hidden = false;
   } else {
-    $(".sources").hidden = true;
+    sourcesEl.hidden = true;
   }
-}
-
-function renderAnswer(data) {
-  /* Tools used */
-  renderToolsUsed(data.tools_used);
-
-  /* Markdown → sanitised HTML */
-  const html = DOMPurify.sanitize(marked.parse(data.answer), {
-    ADD_ATTR: ["target"],
-  });
-  $(".answer-content").innerHTML = html;
-
-  /* Sources */
-  renderSources(data.sources);
-
-  /* Model attribution */
-  $(".model-attr").textContent = `Answered by ${data.model}`;
-
-  /* Feedback */
-  resetFeedback();
-  currentQueryId = data.query_id || null;
-  if (currentQueryId) $(".feedback-bar").hidden = false;
 }
 
 /* Example cards */
 document.querySelectorAll(".example-card").forEach((card) => {
   card.addEventListener("click", () => {
     const q = card.dataset.question;
-    textarea.value = q;
-    textarea.style.height = "auto";
-    textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px";
     submitQuestion(q);
   });
 });
 
-/* Ask another */
-$(".ask-another-btn").addEventListener("click", () => {
+/* New conversation */
+newConvBtn.addEventListener("click", () => {
   clearQueryParam();
+  conversationHistory = [];
+  sections.conversation.innerHTML = "";
+  currentQueryId = null;
+  currentAnswerEl = null;
+  typingIndicatorEl = null;
   textarea.value = "";
   textarea.style.height = "auto";
-  showState("empty");
+  showLanding();
   textarea.focus();
 });
 
-/* Copy link */
-$(".copy-link-btn").addEventListener("click", () => {
-  const btn = $(".copy-link-btn");
-  const url = window.location.href;
+/* Feedback handler (per answer block) */
+async function handleFeedback(btn, answerEl) {
+  const queryId = answerEl.dataset.queryId;
+  if (!queryId) return;
+  const feedback = btn.dataset.feedback;
 
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(url).then(() => showCopied(btn));
-  } else {
-    /* Fallback for insecure contexts */
-    const ta = document.createElement("textarea");
-    ta.value = url;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    document.body.removeChild(ta);
-    showCopied(btn);
-  }
-});
-
-function showCopied(btn) {
-  btn.textContent = "Copied!";
-  btn.classList.add("copied");
-  setTimeout(() => {
-    btn.textContent = "Copy link";
-    btn.classList.remove("copied");
-  }, 2000);
-}
-
-/* Feedback */
-function resetFeedback() {
-  $(".feedback-bar").hidden = true;
-  $(".feedback-thanks").hidden = true;
-  $(".feedback-label").hidden = false;
-  document.querySelectorAll(".feedback-btn").forEach((btn) => {
-    btn.classList.remove("selected");
-    btn.disabled = false;
-    btn.hidden = false;
+  /* Optimistic UI update */
+  answerEl.querySelectorAll(".feedback-btn").forEach((b) => {
+    b.disabled = true;
+    b.classList.remove("selected");
   });
-  currentQueryId = null;
-}
+  btn.classList.add("selected");
 
-document.querySelectorAll(".feedback-btn").forEach((btn) => {
-  btn.addEventListener("click", async () => {
-    if (!currentQueryId) return;
-    const feedback = btn.dataset.feedback;
-
-    /* Optimistic UI update */
-    document.querySelectorAll(".feedback-btn").forEach((b) => {
-      b.disabled = true;
-      b.classList.remove("selected");
+  try {
+    const resp = await fetch("/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query_id: queryId, feedback }),
     });
-    btn.classList.add("selected");
-
-    try {
-      const resp = await fetch("/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query_id: currentQueryId, feedback }),
+    if (resp.ok) {
+      answerEl.querySelector(".feedback-label").hidden = true;
+      answerEl.querySelectorAll(".feedback-btn").forEach((b) => {
+        if (b !== btn) b.hidden = true;
       });
-      if (resp.ok) {
-        $(".feedback-label").hidden = true;
-        document.querySelectorAll(".feedback-btn").forEach((b) => {
-          if (b !== btn) b.hidden = true;
-        });
-        $(".feedback-thanks").hidden = false;
-      }
-    } catch {
-      /* Silently fail — feedback is non-critical */
-      document.querySelectorAll(".feedback-btn").forEach((b) => {
-        b.disabled = false;
-      });
+      answerEl.querySelector(".feedback-thanks").hidden = false;
     }
-  });
-});
+  } catch {
+    /* Silently fail — feedback is non-critical */
+    answerEl.querySelectorAll(".feedback-btn").forEach((b) => {
+      b.disabled = false;
+    });
+  }
+}
 
 /* Retry */
 $(".retry-btn").addEventListener("click", () => {
@@ -407,11 +519,8 @@ $(".retry-btn").addEventListener("click", () => {
 /* Initial state — auto-submit if ?q= is present */
 const initialQuery = getQueryParam();
 if (initialQuery) {
-  textarea.value = initialQuery;
-  textarea.style.height = "auto";
-  textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px";
   lastQuestion = initialQuery;
   submitQuestion(initialQuery);
 } else {
-  showState("empty");
+  showLanding();
 }

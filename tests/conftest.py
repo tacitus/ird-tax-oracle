@@ -51,10 +51,17 @@ def mock_retriever() -> AsyncMock:
 
 @pytest.fixture
 def mock_llm() -> AsyncMock:
-    """Async mock of LLMGateway returning a simple text completion."""
+    """Async mock of LLMGateway returning a simple text completion.
+
+    The answer includes a markdown link so ensure_citations() is a no-op
+    (matching realistic LLM output that cites sources inline).
+    """
     llm = AsyncMock()
     llm.complete.return_value = CompletionResult(
-        content="The top tax rate is 39%.",
+        content=(
+            "The top tax rate is 39%"
+            " ([Tax rates](https://ird.govt.nz/rates))."
+        ),
         tool_calls=None,
         raw_message=MagicMock(),
         model="gemini/gemini-2.5-flash",

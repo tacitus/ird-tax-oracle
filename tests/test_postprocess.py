@@ -1,7 +1,7 @@
 """Tests for LLM answer post-processing."""
 
 from src.db.models import SourceReference
-from src.llm.postprocess import linkify_bare_urls, strip_trailing_sources
+from src.llm.postprocess import ensure_citations, linkify_bare_urls, strip_trailing_sources
 
 # --- strip_trailing_sources ---
 
@@ -140,3 +140,44 @@ def test_linkify_empty_sources() -> None:
         "See [https://www.ird.govt.nz/income-tax/rates]"
         "(https://www.ird.govt.nz/income-tax/rates) for details."
     )
+
+
+# --- ensure_citations ---
+
+
+def test_ensure_citations_appends_when_none() -> None:
+    """Appends primary source when answer has no markdown links."""
+    answer = "The top tax rate is 39% for income over $180,000."
+    sources = _make_sources()
+    result = ensure_citations(answer, sources)
+    assert result.endswith(
+        "For more details, see [Tax rates for individuals]"
+        "(https://www.ird.govt.nz/income-tax/rates)."
+    )
+    assert answer in result
+
+
+def test_ensure_citations_skips_when_link_exists() -> None:
+    """Leaves answer unchanged when it already has a markdown link."""
+    answer = (
+        "The rate is 39% "
+        "([Tax rates](https://www.ird.govt.nz/income-tax/rates))."
+    )
+    sources = _make_sources()
+    result = ensure_citations(answer, sources)
+    assert result == answer
+
+
+def test_ensure_citations_empty_sources() -> None:
+    """Returns answer unchanged when sources list is empty."""
+    answer = "No sources available."
+    result = ensure_citations(answer, [])
+    assert result == answer
+
+
+def test_ensure_citations_uses_url_if_no_title() -> None:
+    """Falls back to URL as link text when source has no title."""
+    answer = "The rate is 39%."
+    sources = [SourceReference(url="https://ird.govt.nz/rates", title=None)]
+    result = ensure_citations(answer, sources)
+    assert "[https://ird.govt.nz/rates]" in result

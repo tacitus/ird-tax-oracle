@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://taxapp:changeme@localhost:5432/nz_tax"
     gemini_api_key: str = ""
     llm_default_model: str = "gemini/gemini-2.5-flash"
+    auth_username: str = ""
+    auth_password: str = ""
+    reranker_enabled: bool = True
 
     @property
     def database_url_sync(self) -> str:
@@ -17,8 +20,8 @@ class Settings(BaseSettings):
 
     @property
     def database_url_asyncpg(self) -> str:
-        """Return a plain postgresql:// URL for asyncpg (it doesn't use the +asyncpg scheme)."""
-        return self.database_url.replace("+asyncpg", "").replace("postgresql://", "postgresql://")
+        """Return a plain postgresql:// URL for asyncpg (no +asyncpg scheme)."""
+        return self.database_url.replace("+asyncpg", "")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

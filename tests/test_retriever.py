@@ -1,6 +1,7 @@
 """Tests for RRF fusion logic and HybridRetriever.search()."""
 
 from unittest.mock import AsyncMock, call
+from uuid import uuid4
 
 import pytest
 
@@ -77,6 +78,7 @@ def _make_db_row(
 ) -> dict:  # type: ignore[type-arg]
     """Build a dict matching asyncpg Row for semantic/keyword queries."""
     return {
+        "chunk_id": uuid4(),
         "content": content,
         "section_title": "Section",
         "tax_year": None,

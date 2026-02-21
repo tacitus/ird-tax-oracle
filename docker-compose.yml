@@ -39,6 +39,7 @@ services:
       - ./src:/app/src
       - ./config:/app/config
       - ./static:/app/static
+      - hf_cache:/root/.cache/huggingface
 
   # Dev/test runner — usage:
   #   docker compose run --rm dev pytest
@@ -69,3 +70,4 @@ services:
 volumes:
   pgdata:
   ollama_data:
+  hf_cache:

@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from src.db.models import RetrievalResult
+from src.db.models import ConversationTurn, RetrievalResult
 
 _SYSTEM_PROMPT_TEMPLATE = """\
 You are a New Zealand personal income tax assistant. You help New Zealand \
@@ -155,7 +155,8 @@ def format_context_message(chunks: list[RetrievalResult]) -> str:
 
     parts = ["<context>"]
     for i, chunk in enumerate(chunks, 1):
-        parts.append(f'<source id="{i}">')
+        cite_key = f"[{i}]"
+        parts.append(f'<source id="{i}" cite="{cite_key}">')
         parts.append(f"  <title>{chunk.source_title or chunk.source_url}</title>")
         parts.append(f"  <url>{chunk.source_url}</url>")
         if chunk.source_type:
@@ -175,21 +176,34 @@ def build_rag_messages(
     query: str,
     chunks: list[RetrievalResult],
     today: date | None = None,
+    history: list[ConversationTurn] | None = None,
 ) -> list[dict[str, str]]:
     """Build the message list for a RAG-grounded LLM call.
 
-    Produces three messages: system prompt, context (user), question (user).
+    Message structure:
+      1. system — system prompt
+      2. user — context block (retrieved chunks)
+      3. For each prior turn in history: user + assistant
+      4. user — current question
 
     Args:
         query: The user's question.
         chunks: Retrieved context chunks with source attribution.
         today: Override date for testing tax year injection.
+        history: Prior conversation turns for multi-turn context.
 
     Returns:
-        OpenAI-format messages list (system + 2 user messages).
+        OpenAI-format messages list.
     """
-    return [
+    messages: list[dict[str, str]] = [
         {"role": "system", "content": format_system_prompt(today)},
         {"role": "user", "content": format_context_message(chunks)},
-        {"role": "user", "content": query},
     ]
+
+    if history:
+        for turn in history:
+            messages.append({"role": "user", "content": turn.question})
+            messages.append({"role": "assistant", "content": turn.answer})
+
+    messages.append({"role": "user", "content": query})
+    return messages

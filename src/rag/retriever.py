@@ -1,12 +1,18 @@
 """Hybrid retriever: semantic search + keyword search with RRF fusion."""
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import asyncpg
 import numpy as np
 
 from src.db.models import RetrievalResult
 from src.rag.embedder import GeminiEmbedder
+
+if TYPE_CHECKING:
+    from src.rag.reranker import CrossEncoderReranker
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +23,15 @@ _RRF_K = 60
 class HybridRetriever:
     """Two-query hybrid search over document_chunks with RRF fusion."""
 
-    def __init__(self, pool: asyncpg.Pool, embedder: GeminiEmbedder) -> None:
+    def __init__(
+        self,
+        pool: asyncpg.Pool,
+        embedder: GeminiEmbedder,
+        reranker: CrossEncoderReranker | None = None,
+    ) -> None:
         self._pool = pool
         self._embedder = embedder
+        self._reranker = reranker
 
     async def search(
         self,
@@ -39,7 +51,9 @@ class HybridRetriever:
         Returns:
             Ranked list of RetrievalResult.
         """
-        fetch_k = top_k * 3  # over-fetch for better fusion
+        # Over-fetch more when reranking so the reranker has better candidates
+        fetch_multiplier = 4 if self._reranker else 3
+        fetch_k = top_k * fetch_multiplier
 
         query_embedding = await self._embedder.embed_query(query)
 
@@ -51,7 +65,14 @@ class HybridRetriever:
                 conn, query, fetch_k, source_type, tax_year
             )
 
-        return rrf_fuse(semantic_rows, keyword_rows, top_k)
+        # Fuse with RRF — over-fetch if reranker will further refine
+        rrf_top = top_k * 2 if self._reranker else top_k
+        fused = rrf_fuse(semantic_rows, keyword_rows, rrf_top)
+
+        if self._reranker:
+            return self._reranker.rerank(query, fused, top_k=top_k)
+
+        return fused
 
     async def _semantic_search(
         self,
@@ -80,7 +101,7 @@ class HybridRetriever:
         where_clause = " AND ".join(conditions)
 
         sql = f"""
-            SELECT c.content, c.section_title, c.tax_year,
+            SELECT c.id AS chunk_id, c.content, c.section_title, c.tax_year,
                    s.url AS source_url, s.title AS source_title,
                    s.source_type,
                    c.embedding <=> $1 AS distance
@@ -96,6 +117,7 @@ class HybridRetriever:
         )
         return [
             RetrievalResult(
+                chunk_id=r["chunk_id"],
                 content=r["content"],
                 section_title=r["section_title"],
                 source_url=r["source_url"],
@@ -138,7 +160,7 @@ class HybridRetriever:
         where_clause = " AND ".join(conditions)
 
         sql = f"""
-            SELECT c.content, c.section_title, c.tax_year,
+            SELECT c.id AS chunk_id, c.content, c.section_title, c.tax_year,
                    s.url AS source_url, s.title AS source_title,
                    s.source_type,
                    ts_rank_cd(c.search_vector, plainto_tsquery('english', $1)) AS rank
@@ -152,6 +174,7 @@ class HybridRetriever:
         rows = await conn.fetch(sql, query, limit, *filter_params)
         return [
             RetrievalResult(
+                chunk_id=r["chunk_id"],
                 content=r["content"],
                 section_title=r["section_title"],
                 source_url=r["source_url"],

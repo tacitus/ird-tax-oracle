@@ -13,6 +13,9 @@ from config import load_yaml_config
 
 logger = logging.getLogger(__name__)
 
+# Module-level LRU cache for query embeddings (sync wrapper stores results)
+_EMBED_CACHE_SIZE = 256
+
 
 class GeminiEmbedder:
     """Embed text using Gemini's embedding model via the google-genai SDK."""
@@ -28,6 +31,8 @@ class GeminiEmbedder:
         self._task_type_document = config.get("task_type_document", "RETRIEVAL_DOCUMENT")
         self._task_type_query = config.get("task_type_query", "RETRIEVAL_QUERY")
         self.client = genai.Client()  # reads GEMINI_API_KEY from env
+        self._query_cache: dict[str, list[float]] = {}
+        self._cache_max = _EMBED_CACHE_SIZE
 
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of document chunks for storage.
@@ -55,12 +60,18 @@ class GeminiEmbedder:
     async def embed_query(self, text: str) -> list[float]:
         """Embed a search query — uses RETRIEVAL_QUERY task type for asymmetric retrieval.
 
+        Results are cached in-memory to avoid re-embedding identical queries.
+
         Args:
             text: Query text to embed.
 
         Returns:
             Embedding vector.
         """
+        if text in self._query_cache:
+            logger.debug("Embedding cache hit for query: %s", text[:40])
+            return self._query_cache[text]
+
         result = await self.client.aio.models.embed_content(
             model=self.model,
             contents=text,
@@ -69,4 +80,12 @@ class GeminiEmbedder:
                 output_dimensionality=self.dimensions,
             ),
         )
-        return result.embeddings[0].values
+        embedding = result.embeddings[0].values
+
+        # Evict oldest entries if cache is full
+        if len(self._query_cache) >= self._cache_max:
+            oldest_key = next(iter(self._query_cache))
+            del self._query_cache[oldest_key]
+        self._query_cache[text] = embedding
+
+        return embedding

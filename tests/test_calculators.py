@@ -76,49 +76,62 @@ class TestAccLevy:
     def test_below_cap(self) -> None:
         """$80,000 — below max liable earnings."""
         result = calculate_acc_levy(Decimal("80000"), "2025-26")
-        # $80,000 * 1.30% = $1,040
-        assert result["annual_levy"] == 1040.0
+        # $80,000 * 1.67% = $1,336
+        assert result["annual_levy"] == pytest.approx(1336.0, abs=0.01)
         assert result["liable_earnings"] == 80000.0
 
     def test_above_cap(self) -> None:
         """$200,000 — capped at max liable earnings."""
         result = calculate_acc_levy(Decimal("200000"), "2025-26")
-        assert result["liable_earnings"] == 145014.0
-        # $145,014 * 1.30% = $1,885.182
-        assert result["annual_levy"] == pytest.approx(1885.182, abs=0.01)
+        assert result["liable_earnings"] == 152790.0
+        # $152,790 * 1.67% = $2,551.593
+        assert result["annual_levy"] == pytest.approx(2551.593, abs=0.01)
 
     def test_zero_income(self) -> None:
         result = calculate_acc_levy(Decimal("0"), "2025-26")
         assert result["annual_levy"] == 0.0
 
     def test_different_year_rate(self) -> None:
-        """2023-24 has 1.53% rate vs 2025-26 at 1.30%."""
+        """2023-24 has 1.53% rate vs 2025-26 at 1.67%."""
         old = calculate_acc_levy(Decimal("80000"), "2023-24")
         new = calculate_acc_levy(Decimal("80000"), "2025-26")
         assert old["acc_rate"] == 0.0153
-        assert new["acc_rate"] == 0.013
-        assert old["annual_levy"] > new["annual_levy"]
+        assert new["acc_rate"] == 0.0167
+        assert new["annual_levy"] > old["annual_levy"]
+
+    def test_2024_25_rate(self) -> None:
+        """2024-25 has 1.60% rate."""
+        result = calculate_acc_levy(Decimal("80000"), "2024-25")
+        assert result["acc_rate"] == 0.016
+        # $80,000 * 1.60% = $1,280
+        assert result["annual_levy"] == pytest.approx(1280.0, abs=0.01)
 
 
 class TestStudentLoan:
     def test_below_threshold(self) -> None:
-        """$20,000 — below $22,828 threshold, no repayment."""
+        """$20,000 — below $24,128 threshold, no repayment."""
         result = calculate_student_loan_repayment(Decimal("20000"), "2025-26")
         assert result["annual_repayment"] == 0.0
 
     def test_above_threshold(self) -> None:
         """$65,000 — repayment on income above threshold."""
         result = calculate_student_loan_repayment(Decimal("65000"), "2025-26")
-        # ($65,000 - $22,828) * 12% = $42,172 * 0.12 = $5,060.64
-        assert result["annual_repayment"] == pytest.approx(5060.64, abs=0.01)
+        # ($65,000 - $24,128) * 12% = $40,872 * 0.12 = $4,904.64
+        assert result["annual_repayment"] == pytest.approx(4904.64, abs=0.01)
 
     def test_zero_income(self) -> None:
         result = calculate_student_loan_repayment(Decimal("0"), "2025-26")
         assert result["annual_repayment"] == 0.0
 
     def test_exact_threshold(self) -> None:
-        result = calculate_student_loan_repayment(Decimal("22828"), "2025-26")
+        result = calculate_student_loan_repayment(Decimal("24128"), "2025-26")
         assert result["annual_repayment"] == 0.0
+
+    def test_2023_24_threshold(self) -> None:
+        """2023-24 threshold is $22,828."""
+        result = calculate_student_loan_repayment(Decimal("65000"), "2023-24")
+        # ($65,000 - $22,828) * 12% = $42,172 * 0.12 = $5,060.64
+        assert result["annual_repayment"] == pytest.approx(5060.64, abs=0.01)
 
 
 class TestPaye:
@@ -178,7 +191,7 @@ class TestCrossYear:
         assert new["total_tax"] < old["total_tax"]
 
     def test_acc_rate_changed(self) -> None:
-        """ACC rate changed between 2023-24 (1.53%) and 2025-26 (1.30%)."""
+        """ACC rate changed between 2023-24 (1.53%) and 2025-26 (1.67%)."""
         old = calculate_acc_levy(Decimal("100000"), "2023-24")
         new = calculate_acc_levy(Decimal("100000"), "2025-26")
-        assert old["annual_levy"] > new["annual_levy"]
+        assert new["annual_levy"] > old["annual_levy"]

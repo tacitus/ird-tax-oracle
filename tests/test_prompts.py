@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from src.db.models import RetrievalResult
+from src.db.models import ConversationTurn, RetrievalResult
 from src.llm.prompts import (
     build_rag_messages,
     format_context_message,
@@ -110,7 +110,7 @@ def test_format_context_xml_structure() -> None:
         tax_year="2025-26",
     )
     result = format_context_message([chunk])
-    assert '<source id="1">' in result
+    assert '<source id="1" cite="[1]">' in result
     assert "<title>Income Tax Rates</title>" in result
     assert "<url>https://ird.govt.nz/rates</url>" in result
     assert "<type>ird_guidance</type>" in result
@@ -137,8 +137,8 @@ def test_format_context_multiple_chunks() -> None:
         _make_chunk(content="Second", title="Other Page"),
     ]
     result = format_context_message(chunks)
-    assert '<source id="1">' in result
-    assert '<source id="2">' in result
+    assert '<source id="1" cite="[1]">' in result
+    assert '<source id="2" cite="[2]">' in result
     assert "First" in result
     assert "Second" in result
 
@@ -178,7 +178,7 @@ def test_build_rag_messages_context_is_xml() -> None:
     messages = build_rag_messages("test", [_make_chunk()], today=date(2026, 2, 14))
     context_msg = messages[1]["content"]
     assert "<context>" in context_msg
-    assert '<source id="1">' in context_msg
+    assert '<source id="1" cite="[1]">' in context_msg
 
 
 def test_build_rag_messages_question_is_separate() -> None:
@@ -198,3 +198,38 @@ def test_build_rag_messages_empty_context() -> None:
     messages = build_rag_messages("q", [], today=date(2026, 2, 14))
     assert len(messages) == 3
     assert "No relevant documents" in messages[1]["content"]
+
+
+# --- Message builder with history ---
+
+
+def test_build_rag_messages_with_history() -> None:
+    """History inserts user/assistant pairs between context and question."""
+    history = [
+        ConversationTurn(question="What are the tax brackets?", answer="The brackets are..."),
+        ConversationTurn(question="And for 2024-25?", answer="In 2024-25..."),
+    ]
+    messages = build_rag_messages(
+        "How much tax on $80k?",
+        [_make_chunk()],
+        today=date(2026, 2, 14),
+        history=history,
+    )
+    # system + context + 2 history turns (4 msgs) + question = 7
+    assert len(messages) == 7
+    assert messages[0]["role"] == "system"
+    assert messages[1]["role"] == "user"  # context
+    assert messages[2] == {"role": "user", "content": "What are the tax brackets?"}
+    assert messages[3] == {"role": "assistant", "content": "The brackets are..."}
+    assert messages[4] == {"role": "user", "content": "And for 2024-25?"}
+    assert messages[5] == {"role": "assistant", "content": "In 2024-25..."}
+    assert messages[6] == {"role": "user", "content": "How much tax on $80k?"}
+
+
+def test_build_rag_messages_empty_history_unchanged() -> None:
+    """Empty history list produces same output as no history."""
+    messages_none = build_rag_messages("q", [_make_chunk()], today=date(2026, 2, 14))
+    messages_empty = build_rag_messages(
+        "q", [_make_chunk()], today=date(2026, 2, 14), history=[]
+    )
+    assert len(messages_none) == len(messages_empty) == 3

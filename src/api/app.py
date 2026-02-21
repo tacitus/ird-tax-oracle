@@ -2,7 +2,6 @@
 
 import base64
 import logging
-import os
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -12,11 +11,13 @@ from fastapi import FastAPI, Request, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from config.settings import settings
 from src.api.routes import router
 from src.db.session import close_pool, get_pool
 from src.llm.gateway import LLMGateway
 from src.orchestrator import Orchestrator
 from src.rag.embedder import GeminiEmbedder
+from src.rag.reranker import CrossEncoderReranker
 from src.rag.retriever import HybridRetriever
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     pool = await get_pool()
     embedder = GeminiEmbedder()
-    retriever = HybridRetriever(pool, embedder)
+    reranker = CrossEncoderReranker() if settings.reranker_enabled else None
+    retriever = HybridRetriever(pool, embedder, reranker=reranker)
     llm = LLMGateway()
     app.state.pool = pool
     app.state.orchestrator = Orchestrator(retriever, llm, pool=pool)
@@ -50,10 +52,6 @@ UNAUTHORIZED = Response(
 )
 
 
-AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "").encode()
-AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "").encode()
-
-
 class BasicAuthMiddleware(BaseHTTPMiddleware):
     """Enforce HTTP Basic Auth on all requests."""
 
@@ -65,8 +63,10 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
                 username, password = decoded.split(":", 1)
             except Exception:
                 return UNAUTHORIZED
-            if secrets.compare_digest(username.encode(), AUTH_USERNAME) and secrets.compare_digest(
-                password.encode(), AUTH_PASSWORD
+            if secrets.compare_digest(
+                username.encode(), settings.auth_username.encode()
+            ) and secrets.compare_digest(
+                password.encode(), settings.auth_password.encode()
             ):
                 return await call_next(request)
         return UNAUTHORIZED

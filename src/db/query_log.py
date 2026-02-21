@@ -16,6 +16,9 @@ async def log_query(
     model: str,
     latency_ms: int,
     tool_calls: list[dict] | None = None,
+    chunk_ids: list[UUID] | None = None,
+    cost_usd: float | None = None,
+    error_message: str | None = None,
 ) -> UUID | None:
     """Insert a row into query_log and return its ID.
 
@@ -26,8 +29,10 @@ async def log_query(
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO query_log (question, answer, model_used, latency_ms, tool_calls)
-                VALUES ($1, $2, $3, $4, $5::jsonb)
+                INSERT INTO query_log
+                    (question, answer, model_used, latency_ms, tool_calls,
+                     chunks_used, cost_usd, error_message)
+                VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
                 RETURNING id
                 """,
                 question,
@@ -35,6 +40,9 @@ async def log_query(
                 model,
                 latency_ms,
                 json.dumps(tool_calls) if tool_calls else None,
+                chunk_ids or [],
+                cost_usd,
+                error_message,
             )
             return UUID(str(row["id"])) if row else None
     except Exception:
@@ -65,3 +73,30 @@ async def update_feedback(
     except Exception:
         logger.exception("Failed to update feedback for query %s", query_id)
         return False
+
+
+async def get_query_stats(pool: asyncpg.Pool) -> dict:
+    """Get aggregate query stats for the health endpoint."""
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    COUNT(*) AS total_queries,
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 hour')
+                        AS queries_last_hour,
+                    ROUND(AVG(latency_ms)) AS avg_latency_ms,
+                    ROUND(AVG(latency_ms) FILTER (WHERE created_at > NOW() - INTERVAL '1 hour'))
+                        AS avg_latency_last_hour,
+                    COUNT(*) FILTER (WHERE feedback = 'positive') AS positive_feedback,
+                    COUNT(*) FILTER (WHERE feedback = 'negative') AS negative_feedback,
+                    COUNT(*) FILTER (WHERE error_message IS NOT NULL) AS error_count
+                FROM query_log
+                """
+            )
+            if not row:
+                return {}
+            return {k: v for k, v in dict(row).items() if v is not None}
+    except Exception:
+        logger.exception("Failed to get query stats")
+        return {}

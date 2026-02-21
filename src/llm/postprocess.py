@@ -54,3 +54,21 @@ def linkify_bare_urls(answer: str, sources: list[SourceReference]) -> str:
         return f"[{title}]({url})"
 
     return _BARE_URL_RE.sub(_replace_url, answer)
+
+
+# Matches markdown links: [text](url)
+_MARKDOWN_LINK_RE = re.compile(r"\[.+?\]\(https?://[^\s)]+\)")
+
+
+def ensure_citations(answer: str, sources: list[SourceReference]) -> str:
+    """Append a source link if the answer contains no markdown links at all.
+
+    This is a safety net: the LLM is prompted to cite inline, but sometimes
+    it doesn't. When that happens, append the primary source as a footer.
+    """
+    if not sources or _MARKDOWN_LINK_RE.search(answer):
+        return answer
+
+    primary = sources[0]
+    title = primary.title or primary.url
+    return f"{answer}\n\nFor more details, see [{title}]({primary.url})."

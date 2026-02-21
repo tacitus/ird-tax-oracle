@@ -23,6 +23,8 @@ dependencies = [
     # Migrations
     "yoyo-migrations>=8.2",
     "psycopg2-binary>=2.9",
+    # Reranking
+    "sentence-transformers>=3.0",
     # Config
     "pydantic-settings>=2.7",
     "pyyaml>=6.0",

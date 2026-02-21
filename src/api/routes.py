@@ -11,8 +11,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
-from src.db.models import AskResponse
-from src.db.query_log import update_feedback
+from src.db.models import AskResponse, ConversationTurn
+from src.db.query_log import get_query_stats, update_feedback
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ class AskRequest(BaseModel):
     """Request body for the /ask endpoint."""
 
     question: str
+    history: list[ConversationTurn] = []
 
 
 class FeedbackRequest(BaseModel):
@@ -48,26 +49,37 @@ async def favicon() -> FileResponse:
 
 
 @router.get("/health")
-async def health() -> dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "ok"}
+async def health(request: Request) -> dict:  # type: ignore[type-arg]
+    """Health check endpoint with optional query stats."""
+    result: dict[str, object] = {"status": "ok"}
+    pool = getattr(request.app.state, "pool", None)
+    if pool is not None:
+        stats = await get_query_stats(pool)
+        if stats:
+            result["query_stats"] = stats
+    return result
+
+
+_MAX_HISTORY_TURNS = 5
 
 
 @router.post("/ask", response_model=AskResponse)
 async def ask(body: AskRequest, request: Request) -> AskResponse:
     """Answer a tax question using RAG-grounded LLM."""
     orchestrator = request.app.state.orchestrator
-    return await orchestrator.ask(body.question)
+    history = body.history[:_MAX_HISTORY_TURNS] or None
+    return await orchestrator.ask(body.question, history=history)
 
 
 @router.post("/ask/stream")
 async def ask_stream(body: AskRequest, request: Request) -> StreamingResponse:
     """Stream a tax question answer via Server-Sent Events."""
     orchestrator = request.app.state.orchestrator
+    history = body.history[:_MAX_HISTORY_TURNS] or None
 
     async def event_generator():  # type: ignore[no-untyped-def]
         try:
-            async for event in orchestrator.ask_stream(body.question):
+            async for event in orchestrator.ask_stream(body.question, history=history):
                 yield f"data: {json.dumps(event)}\n\n"
         except Exception:
             logger.exception("Error during streaming")

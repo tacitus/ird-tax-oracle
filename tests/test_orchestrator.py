@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.db.models import RetrievalResult
+from src.db.models import ConversationTurn, RetrievalResult
 from src.llm.gateway import CompletionResult
 from src.orchestrator import Orchestrator
 
@@ -26,6 +26,13 @@ def _make_retrieval_result(
     )
 
 
+# Default mock LLM answer includes a markdown link so ensure_citations() is a no-op
+_DEFAULT_ANSWER = (
+    "The top tax rate is 39%"
+    " ([Tax rates](https://ird.govt.nz/rates))."
+)
+
+
 def _tool_call(name: str, arguments: dict) -> MagicMock:  # type: ignore[type-arg]
     """Build a fake tool_call object matching LiteLLM's response shape."""
     tc = MagicMock()
@@ -41,7 +48,7 @@ async def test_ask_happy_path(mock_retriever: AsyncMock, mock_llm: AsyncMock) ->
     orch = Orchestrator(mock_retriever, mock_llm)
     resp = await orch.ask("What is the top tax rate?")
 
-    assert resp.answer == "The top tax rate is 39%."
+    assert resp.answer == _DEFAULT_ANSWER
     assert resp.model == "gemini/gemini-2.5-flash"
     assert resp.tools_used == []
     assert len(resp.sources) == 2
@@ -70,7 +77,10 @@ async def test_ask_with_tool_call(mock_retriever: AsyncMock) -> None:
     )
     # Second call: LLM returns final answer
     second_result = CompletionResult(
-        content="KiwiSaver contributions are tax-free.",
+        content=(
+            "KiwiSaver contributions are tax-free"
+            " ([KiwiSaver](https://ird.govt.nz/kiwisaver))."
+        ),
         tool_calls=None,
         raw_message=MagicMock(),
         model="gemini/gemini-2.5-flash",
@@ -88,7 +98,10 @@ async def test_ask_with_tool_call(mock_retriever: AsyncMock) -> None:
     orch = Orchestrator(mock_retriever, llm)
     resp = await orch.ask("Tell me about KiwiSaver")
 
-    assert resp.answer == "KiwiSaver contributions are tax-free."
+    assert resp.answer == (
+        "KiwiSaver contributions are tax-free"
+        " ([KiwiSaver](https://ird.govt.nz/kiwisaver))."
+    )
     assert llm.complete.await_count == 2
     assert mock_retriever.search.await_count == 2
     # Sources should include both initial and followup chunks
@@ -110,7 +123,10 @@ async def test_ask_max_tool_rounds_respected(mock_retriever: AsyncMock) -> None:
         model="gemini/gemini-2.5-flash",
     )
     final_result = CompletionResult(
-        content="Final answer after max rounds.",
+        content=(
+            "Final answer after max rounds"
+            " ([Tax rates](https://ird.govt.nz/rates))."
+        ),
         tool_calls=[_tool_call("search_tax_documents", {"query": "more"})],
         raw_message=tool_msg,
         model="gemini/gemini-2.5-flash",
@@ -130,7 +146,10 @@ async def test_ask_max_tool_rounds_respected(mock_retriever: AsyncMock) -> None:
 
     # 1 initial + 3 followups = 4 total LLM calls
     assert llm.complete.await_count == 4
-    assert resp.answer == "Final answer after max rounds."
+    assert resp.answer == (
+        "Final answer after max rounds"
+        " ([Tax rates](https://ird.govt.nz/rates))."
+    )
 
 
 @pytest.mark.asyncio
@@ -241,7 +260,10 @@ async def test_calculator_tool_dispatch(mock_retriever: AsyncMock) -> None:
         model="gemini/gemini-2.5-flash",
     )
     second_result = CompletionResult(
-        content="On $65,000 you'd pay $11,720.50 in income tax.",
+        content=(
+            "On $65,000 you'd pay $11,720.50 in income tax"
+            " ([Tax rates](https://ird.govt.nz/rates))."
+        ),
         tool_calls=None,
         raw_message=MagicMock(),
         model="gemini/gemini-2.5-flash",
@@ -253,7 +275,10 @@ async def test_calculator_tool_dispatch(mock_retriever: AsyncMock) -> None:
     orch = Orchestrator(mock_retriever, llm)
     resp = await orch.ask("How much tax on $65,000?")
 
-    assert resp.answer == "On $65,000 you'd pay $11,720.50 in income tax."
+    assert resp.answer == (
+        "On $65,000 you'd pay $11,720.50 in income tax"
+        " ([Tax rates](https://ird.govt.nz/rates))."
+    )
     assert llm.complete.await_count == 2
     assert len(resp.tools_used) == 1
     assert resp.tools_used[0].name == "calculate_income_tax"
@@ -319,7 +344,10 @@ async def test_execute_tool_unknown(
         model="gemini/gemini-2.5-flash",
     )
     second_result = CompletionResult(
-        content="I couldn't find that tool.",
+        content=(
+            "I couldn't find that tool"
+            " ([Tax rates](https://ird.govt.nz/rates))."
+        ),
         tool_calls=None,
         raw_message=MagicMock(),
         model="gemini/gemini-2.5-flash",
@@ -330,5 +358,105 @@ async def test_execute_tool_unknown(
     orch = Orchestrator(mock_retriever, mock_llm)
     resp = await orch.ask("use a fake tool")
 
-    assert resp.answer == "I couldn't find that tool."
+    assert resp.answer == (
+        "I couldn't find that tool"
+        " ([Tax rates](https://ird.govt.nz/rates))."
+    )
     assert mock_llm.complete.await_count == 2
+
+
+# --- Conversation history tests ---
+
+
+@pytest.mark.asyncio
+async def test_ask_with_history_rewrites_query(
+    mock_retriever: AsyncMock,
+) -> None:
+    """With history, rewrite_query is called and retriever uses the rewritten query."""
+    # LLM: first call is the rewrite, second is the main completion
+    rewrite_result = CompletionResult(
+        content="What are the NZ income tax brackets for 2024-25?",
+        tool_calls=None,
+        raw_message=MagicMock(),
+        model="gemini/gemini-2.5-flash",
+    )
+    answer_result = CompletionResult(
+        content=(
+            "The 2024-25 brackets are..."
+            " ([Tax rates](https://ird.govt.nz/rates))."
+        ),
+        tool_calls=None,
+        raw_message=MagicMock(),
+        model="gemini/gemini-2.5-flash",
+    )
+
+    llm = AsyncMock()
+    llm.complete.side_effect = [rewrite_result, answer_result]
+
+    history = [
+        ConversationTurn(
+            question="What are the tax brackets?",
+            answer="The current brackets are...",
+        ),
+    ]
+
+    orch = Orchestrator(mock_retriever, llm)
+    resp = await orch.ask("What about for 2024-25?", history=history)
+
+    # Retriever should receive the rewritten query
+    mock_retriever.search.assert_awaited_once_with(
+        "What are the NZ income tax brackets for 2024-25?"
+    )
+    # LLM called twice: rewrite + main completion
+    assert llm.complete.await_count == 2
+    assert "2024-25" in resp.answer
+
+
+@pytest.mark.asyncio
+async def test_ask_without_history_skips_rewrite(
+    mock_retriever: AsyncMock, mock_llm: AsyncMock
+) -> None:
+    """Without history, no rewrite call is made."""
+    orch = Orchestrator(mock_retriever, mock_llm)
+    await orch.ask("What are the tax brackets?")
+
+    # Only one LLM call (no rewrite)
+    mock_llm.complete.assert_awaited_once()
+    mock_retriever.search.assert_awaited_once_with("What are the tax brackets?")
+
+
+@pytest.mark.asyncio
+async def test_ask_history_passed_to_messages(
+    mock_retriever: AsyncMock,
+) -> None:
+    """History is passed through to build_rag_messages for the main LLM call."""
+    rewrite_result = CompletionResult(
+        content="Standalone question",
+        tool_calls=None,
+        raw_message=MagicMock(),
+        model="gemini/gemini-2.5-flash",
+    )
+    answer_result = CompletionResult(
+        content="Answer text ([Tax rates](https://ird.govt.nz/rates)).",
+        tool_calls=None,
+        raw_message=MagicMock(),
+        model="gemini/gemini-2.5-flash",
+    )
+
+    llm = AsyncMock()
+    llm.complete.side_effect = [rewrite_result, answer_result]
+
+    history = [
+        ConversationTurn(question="Prior Q", answer="Prior A"),
+    ]
+
+    orch = Orchestrator(mock_retriever, llm)
+    await orch.ask("Follow-up?", history=history)
+
+    # The main completion (second call) should include history in messages
+    main_call_messages = llm.complete.call_args_list[1][0][0]
+    # Find the history messages: after system + context, before the final question
+    user_messages = [m for m in main_call_messages if m.get("role") == "user"]
+    assistant_messages = [m for m in main_call_messages if m.get("role") == "assistant"]
+    assert any(m["content"] == "Prior Q" for m in user_messages)
+    assert any(m["content"] == "Prior A" for m in assistant_messages)

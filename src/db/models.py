@@ -88,6 +88,7 @@ class ChunkData(BaseModel):
 class RetrievalResult(BaseModel):
     """A single result from hybrid retrieval."""
 
+    chunk_id: UUID | None = None
     content: str
     section_title: str | None = None
     source_url: str
@@ -110,6 +111,13 @@ class ToolUsed(BaseModel):
 
     name: str
     label: str
+
+
+class ConversationTurn(BaseModel):
+    """A single turn in a conversation."""
+
+    question: str
+    answer: str
 
 
 class AskResponse(BaseModel):
